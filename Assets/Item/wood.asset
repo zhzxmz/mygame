@@ -10,8 +10,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8d6245c5c74f0ff45a0fe82b24ebc59c, type: 3}
-  m_Name: ruby
+  m_Name: wood
   m_EditorClassIdentifier: 
-  itemName: Ruby
+  itemName: wood
   count: 1
   icon: {fileID: 21300000, guid: 70cb081f868b52d49b20ce2acc044c99, type: 3}
