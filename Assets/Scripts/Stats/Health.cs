@@ -8,6 +8,8 @@ public class Health : MonoBehaviour
     public event Action<int, int> OnHealthChanged;
     public event Action OnDeath;
 
+    private bool isDead;
+
     void Start()
     {
         currentHP = maxHP;
@@ -15,6 +17,8 @@ public class Health : MonoBehaviour
 
     public void TakeDamage(int Damage)
     {
+        if (isDead) return;
+
         currentHP -= Damage;
         if (currentHP < 0) currentHP = 0;
         OnHealthChanged?.Invoke(currentHP, maxHP);
@@ -23,6 +27,9 @@ public class Health : MonoBehaviour
 
     void Die()
     {
+        if (isDead) return;
+
+        isDead = true;
         Debug.Log("DIE");
         OnDeath?.Invoke();
         Destroy(gameObject);

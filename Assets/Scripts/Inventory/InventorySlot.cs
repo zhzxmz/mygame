@@ -10,6 +10,8 @@ public class InventorySlot : MonoBehaviour
 
     private ItemData itemData;
 
+    public ItemData ItemData => itemData;
+
     public bool IsEmpty()
     {
         return itemData == null;
