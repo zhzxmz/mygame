@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class WorldItem : MonoBehaviour
@@ -10,8 +8,17 @@ public class WorldItem : MonoBehaviour
 
     public void SetItem(ItemData data)
     {
+        if (data == null)
+        {
+            Debug.LogWarning("WorldItem: itemData 为空，无法设置世界物品");
+            return;
+        }
+
         itemData = data;
 
-        iconRenderer.sprite = data.icon;
+        if (iconRenderer != null)
+        {
+            iconRenderer.sprite = data.icon;
+        }
     }
 }
