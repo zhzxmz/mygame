@@ -3,33 +3,77 @@ using UnityEngine;
 
 public class Health : MonoBehaviour
 {
-    public int maxHP;
-    public int currentHP;
-    public event Action<int, int> OnHealthChanged;
+    [SerializeField] private HealthPool healthPool = new HealthPool(100f, 100f);
+
+    public event Action<float, float> OnHealthChanged;
     public event Action OnDeath;
 
-    private bool isDead;
+    public float maxHP => healthPool != null ? healthPool.Max : 0f;
+    public float currentHP => healthPool != null ? healthPool.Current : 0f;
+    public bool IsDead { get; private set; }
 
-    void Start()
+    /// <summary>当前生命池。未来如需多生命池，可在此扩展为列表/字典。</summary>
+    public HealthPool Pool => healthPool;
+
+    void Awake()
     {
-        currentHP = maxHP;
+        if (healthPool == null)
+        {
+            healthPool = new HealthPool(100f, 100f);
+        }
+
+        healthPool.OnChanged += HandleHealthPoolChanged;
     }
 
-    public void TakeDamage(int Damage)
+    void OnDestroy()
     {
-        if (isDead) return;
-
-        currentHP -= Damage;
-        if (currentHP < 0) currentHP = 0;
-        OnHealthChanged?.Invoke(currentHP, maxHP);
-        if (currentHP <= 0) Die();
+        if (healthPool != null)
+        {
+            healthPool.OnChanged -= HandleHealthPoolChanged;
+        }
     }
 
-    void Die()
+    public void TakeDamage(DamageInfo damage)
     {
-        if (isDead) return;
+        if (damage == null || IsDead) return;
 
-        isDead = true;
+        healthPool.Damage(damage.Amount);
+    }
+
+    // 兼容入口：内部转换为 DamageInfo，不复制伤害逻辑。
+    public void TakeDamage(int amount)
+    {
+        TakeDamage(new DamageInfo(amount));
+    }
+
+    public void Heal(float amount)
+    {
+        if (IsDead) return;
+
+        healthPool.Heal(amount);
+    }
+
+    private void HandleHealthPoolChanged(float current, float max)
+    {
+        OnHealthChanged?.Invoke(current, max);
+        CheckDeath();
+    }
+
+    private void CheckDeath()
+    {
+        if (IsDead) return;
+
+        if (healthPool != null && healthPool.IsEmpty)
+        {
+            Die();
+        }
+    }
+
+    private void Die()
+    {
+        if (IsDead) return;
+
+        IsDead = true;
         Debug.Log("DIE");
         OnDeath?.Invoke();
         Destroy(gameObject);

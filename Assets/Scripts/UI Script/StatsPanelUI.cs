@@ -11,6 +11,8 @@ public class StatsPanelUI : MonoBehaviour
 
     void Update()
     {
+        if (stats == null || hpText == null || attackText == null || defenseText == null) return;
+
         hpText.text = $"HP: {stats.currentHP}/{stats.maxHP}";
         attackText.text = $"ATK: {stats.attack}";
         defenseText.text = $"DEF: {stats.defense}";

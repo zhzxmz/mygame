@@ -11,14 +11,14 @@ PlayerState state;
     }
     public void PlayerIsSoul()
     {
-        if (state.PlayerHealth <= 0)
+        if (state == null)
         {
-            PlayerSouls=true;
+            state = GetComponent<PlayerState>();
         }
-        else
-        {
-        PlayerSouls=false;
-        }
+
+        if (state == null) return;
+
+        PlayerSouls = state.PlayerHealth <= 0;
     }
     
 }

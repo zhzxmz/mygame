@@ -15,6 +15,8 @@ public class RayTest : MonoBehaviour
 
     void Detect()
 {
+    if (playerCamera == null) return;
+
     Ray ray = playerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f));
 
     Debug.DrawRay(ray.origin, ray.direction * distance, Color.red, 0.1f);

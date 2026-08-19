@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Bag : MonoBehaviour
+public class BagOpen : MonoBehaviour
 {
     // Start is called before the first frame update
     public GameObject inventoryPanel;
@@ -17,7 +17,7 @@ public class Bag : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.B))
+        if (Input.GetKeyDown(KeyCode.B) && inventoryPanel != null)
         {
             inventoryPanel.SetActive(!inventoryPanel.activeSelf);
         }

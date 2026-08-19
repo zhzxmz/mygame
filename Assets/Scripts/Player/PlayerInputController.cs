@@ -20,12 +20,18 @@ public class PlayerInputController : MonoBehaviour
 
         if (!Input.GetMouseButton(0))
         {
-            cameraController.RotateCamera(mouseX, mouseY);
+            if (cameraController != null)
+            {
+                cameraController.RotateCamera(mouseX, mouseY);
+            }
         }
 
         else
         {
-            weaponController.RotateWeapon(mouseX, mouseY);
+            if (weaponController != null)
+            {
+                weaponController.RotateWeapon(mouseX, mouseY);
+            }
         }
             
     }

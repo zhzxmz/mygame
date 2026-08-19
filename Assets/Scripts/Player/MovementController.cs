@@ -19,9 +19,15 @@ public class MovementController : MonoBehaviour
     private void Start()
     {
         cc = GetComponent<CharacterController>();
+        if (cc == null)
+        {
+            Debug.LogWarning("MovementController: 缺少 CharacterController 组件，移动已禁用");
+        }
     }
     private void Update()
     {
+        if (cc == null || groundCheck == null) return;
+
         isGround = Physics.CheckSphere(groundCheck.position, checkRadius, groundLayer);
         if (isGround && velocity.y < 0)
         {

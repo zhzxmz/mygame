@@ -1,25 +1,14 @@
-using System.Collections.Generic;
 using UnityEngine;
+
 [CreateAssetMenu(menuName = "Item/ItemData")]
-public class ItemData:ScriptableObject
+public class ItemData : ScriptableObject
 {
     public string itemName;
-    public int count;
     public Sprite icon;
 
-    public bool isEmpty => count <= 0;
+    [Tooltip("该物品是否可以堆叠")]
+    public bool stackable = true;
 
-    public void SetItem(string name, int amount, Sprite sprite = null)
-    {
-        itemName = name;
-        count = amount;
-        icon = sprite;
-        
-    }
-    
-    
-
+    [Tooltip("该物品单格最大堆叠数量")]
+    public int maxStack = 99;
 }
-
-
-    

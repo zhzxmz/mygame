@@ -57,21 +57,26 @@ public class WorldItemPickup : MonoBehaviour
             return;
         }
 
-        if (worldItem == null || worldItem.itemData == null)
+        if (worldItem == null || worldItem.Item == null || worldItem.Count <= 0)
         {
-            Debug.LogWarning("WorldItemPickup: WorldItem 或 itemData 为空，无法拾取物品");
+            Debug.LogWarning("WorldItemPickup: WorldItem 或 Item 为空，无法拾取物品");
             return;
         }
 
-        bool added = inventory.AddItem(worldItem.itemData);
-        if (!added)
+        int added = inventory.AddItem(worldItem.Item, worldItem.Count);
+        if (added <= 0)
         {
             return;
         }
 
-        if (destroyOnPickup)
+        int remaining = worldItem.Count - added;
+        if (remaining <= 0)
         {
             Destroy(gameObject);
+        }
+        else
+        {
+            worldItem.SetStack(new ItemStack(worldItem.Item, remaining));
         }
     }
 }

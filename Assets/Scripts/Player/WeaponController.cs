@@ -10,6 +10,8 @@ public class WeaponController : MonoBehaviour
 
     public void RotateWeapon(float mouseX, float mouseY)
     {
+        if (weaponPivot == null) return;
+
         weaponY += mouseX;
         weaponX -= mouseY;
 

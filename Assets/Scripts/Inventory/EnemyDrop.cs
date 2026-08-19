@@ -6,6 +6,9 @@ public class EnemyDrop : MonoBehaviour
 
     public GameObject worldItemPrefab;
 
+    [Tooltip("掉落数量，最小为 1")]
+    public int dropCount = 1;
+
     private Health health;
 
     void Awake()
@@ -14,6 +17,14 @@ public class EnemyDrop : MonoBehaviour
         if (health != null)
         {
             health.OnDeath += Drop;
+        }
+    }
+
+    void OnValidate()
+    {
+        if (dropCount < 1)
+        {
+            dropCount = 1;
         }
     }
 
@@ -48,6 +59,6 @@ public class EnemyDrop : MonoBehaviour
             return;
         }
 
-        worldItem.SetItem(dropItem);
+        worldItem.SetStack(new ItemStack(dropItem, dropCount));
     }
 }

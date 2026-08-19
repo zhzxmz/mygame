@@ -2,16 +2,25 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class HitBox : MonoBehaviour
+public class WeaponHitBox : MonoBehaviour
 {
     public Attack attack;
     void Awake()
     {
-        attack=GetComponent<Attack>();
+        if (attack == null)
+        {
+            attack = GetComponent<Attack>();
+        }
     }
     private void OnTriggerEnter(Collider other)
     {
-        Health health=other.GetComponent<Health>();
+        if (attack == null)
+        {
+            Debug.LogWarning("HitBox: 缺少 Attack 组件，无法造成伤害");
+            return;
+        }
+
+        Health health = other.GetComponent<Health>();
         if (health != null)
         {
             attack.DoAttack(health);

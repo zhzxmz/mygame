@@ -1,19 +1,21 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using TMPro;
 
-public class InventorySlot : MonoBehaviour
+public class InventorySlot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     public Image icon;
     public TextMeshProUGUI countText;
 
-    private ItemData itemData;
+    private ItemStack stack;
+    private GameObject dragVisual;
 
-    public ItemData ItemData => itemData;
+    public ItemStack Stack => stack;
 
     public bool IsEmpty()
     {
-        return itemData == null;
+        return stack == null || stack.Item == null || stack.Count <= 0;
     }
 
     void Awake()
@@ -26,18 +28,73 @@ public class InventorySlot : MonoBehaviour
         AssignMissingReferences();
     }
 
-    public void SetItem(ItemData data)
+    public void SetStack(ItemStack stack)
     {
-        itemData = data;
+        this.stack = stack;
 
         Refresh();
     }
 
     public void Clear()
     {
-        itemData = null;
+        stack = null;
 
         Refresh();
+    }
+
+    public void OnBeginDrag(PointerEventData eventData)
+    {
+        if (IsEmpty()) return;
+
+        Debug.Log($"[InventorySlot] OnBeginDrag: {gameObject.name}, stack={stack.Item?.itemName} x{stack.Count}");
+        eventData.pointerDrag = gameObject;
+        CreateDragVisual(eventData.position);
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+        if (dragVisual != null)
+        {
+            dragVisual.transform.position = eventData.position;
+        }
+    }
+
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        Debug.Log($"[InventorySlot] OnEndDrag: {gameObject.name}");
+        DestroyDragVisual();
+    }
+
+    private void CreateDragVisual(Vector2 position)
+    {
+        Canvas canvas = GetComponentInParent<Canvas>();
+        if (canvas == null) return;
+
+        dragVisual = new GameObject("InventoryDragVisual");
+        dragVisual.transform.SetParent(canvas.transform, false);
+        dragVisual.transform.SetAsLastSibling();
+
+        Image image = dragVisual.AddComponent<Image>();
+        image.sprite = stack.Item.icon;
+        image.raycastTarget = false;
+        image.preserveAspect = true;
+
+        CanvasGroup group = dragVisual.AddComponent<CanvasGroup>();
+        group.blocksRaycasts = false;
+
+        RectTransform rect = dragVisual.GetComponent<RectTransform>();
+        rect.sizeDelta = new Vector2(50f, 50f);
+
+        dragVisual.transform.position = position;
+    }
+
+    private void DestroyDragVisual()
+    {
+        if (dragVisual != null)
+        {
+            Destroy(dragVisual);
+            dragVisual = null;
+        }
     }
 
     private void AssignMissingReferences()
@@ -65,7 +122,7 @@ public class InventorySlot : MonoBehaviour
     {
         AssignMissingReferences();
 
-        if (itemData == null)
+        if (IsEmpty())
         {
             if (icon != null)
                 icon.gameObject.SetActive(false);
@@ -76,19 +133,17 @@ public class InventorySlot : MonoBehaviour
             return;
         }
 
-        // 显示图片
+        // 显示物品图标
         if (icon != null)
         {
             icon.gameObject.SetActive(true);
-
-            icon.sprite = itemData.icon;
-            Debug.Log("替换图片了");
+            icon.sprite = stack.Item.icon;
         }
 
-        // 显示名字（以后这里可以改成数量）
+        // 显示数量；如果没有数量文本组件则跳过
         if (countText != null)
         {
-            countText.text = itemData.itemName;
+            countText.text = stack.Count.ToString();
         }
     }
 }

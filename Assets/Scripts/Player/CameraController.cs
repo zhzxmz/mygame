@@ -12,8 +12,7 @@ public class CameraController : MonoBehaviour
     // 旋转函数，只处理旋转逻辑
     public void RotateCamera(float mouseX, float mouseY)
     {
-        mouseX *= mouseSensitivity * Time.deltaTime;
-        mouseY *= mouseSensitivity * Time.deltaTime;
+        if (player == null) return;
 
         xRotation -= mouseY;
         xRotation = Mathf.Clamp(xRotation, -90f, 90f);
