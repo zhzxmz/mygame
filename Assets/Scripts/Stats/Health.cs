@@ -8,6 +8,9 @@ public class Health : MonoBehaviour
     public event Action<float, float> OnHealthChanged;
     public event Action OnDeath;
 
+    [Tooltip("死亡时是否销毁 GameObject。敌人默认 true；玩家会通过玩家专用脚本设为 false")]
+    public bool destroyOnDeath = true;
+
     public float maxHP => healthPool != null ? healthPool.Max : 0f;
     public float currentHP => healthPool != null ? healthPool.Current : 0f;
     public bool IsDead { get; private set; }
@@ -76,6 +79,10 @@ public class Health : MonoBehaviour
         IsDead = true;
         Debug.Log("DIE");
         OnDeath?.Invoke();
-        Destroy(gameObject);
+
+        if (destroyOnDeath)
+        {
+            Destroy(gameObject);
+        }
     }
 }
