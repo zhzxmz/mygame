@@ -41,7 +41,9 @@ public class EnemyAI : MonoBehaviour
         float distance = Vector3.Distance(transform.position, player.position);
         if (distance <= stoppingDistance) return;
 
-        Vector3 direction = (player.position - transform.position).normalized;
+        Vector3 direction = player.position - transform.position;
+        direction.y = 0f;
+        direction = direction.normalized;
         Vector3 targetPosition = transform.position + direction * moveSpeed * Time.deltaTime;
 
         if (hasRigidbody)
