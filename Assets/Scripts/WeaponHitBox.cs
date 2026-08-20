@@ -1,12 +1,10 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class WeaponHitBox : MonoBehaviour
 {
     public Attack attack;
-
-    private readonly HashSet<Health> alreadyHit = new HashSet<Health>();
-
     void Awake()
     {
         if (attack == null)
@@ -14,18 +12,6 @@ public class WeaponHitBox : MonoBehaviour
             attack = GetComponent<Attack>();
         }
     }
-
-    void Update()
-    {
-        if (MouseLock.IsUIBlocking) return;
-
-        // 每次按下鼠标左键视为一次新的攻击/挥动开始，清空本次命中记录。
-        if (Input.GetMouseButtonDown(0))
-        {
-            alreadyHit.Clear();
-        }
-    }
-
     private void OnTriggerEnter(Collider other)
     {
         if (attack == null)
@@ -35,7 +21,7 @@ public class WeaponHitBox : MonoBehaviour
         }
 
         Health health = other.GetComponent<Health>();
-        if (health != null && alreadyHit.Add(health))
+        if (health != null)
         {
             attack.DoAttack(health);
         }
