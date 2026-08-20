@@ -14,7 +14,10 @@ public class PlayerInputController : MonoBehaviour
     float mouseSensitivity=800f;
     
     void Update()
-    {float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity * Time.deltaTime;
+    {
+        if (MouseLock.IsUIBlocking) return;
+
+        float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity * Time.deltaTime;
     float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity * Time.deltaTime;
 
 

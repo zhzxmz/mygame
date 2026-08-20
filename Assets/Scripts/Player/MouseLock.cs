@@ -2,6 +2,9 @@ using UnityEngine;
 
 public class MouseLock : MonoBehaviour
 {
+    /// <summary>是否处于 UI 输入状态（例如背包打开）。为 true 时释放鼠标并停止游戏输入。</summary>
+    public static bool IsUIBlocking { get; set; }
+
     public CameraController cameraController; // 拖拽赋值
     
     void Start()
@@ -12,7 +15,7 @@ public class MouseLock : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt))
+        if (IsUIBlocking || Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt))
         {
             UnlockCursor();
             EnableCameraControl(false);
