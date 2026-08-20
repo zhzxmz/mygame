@@ -7,8 +7,11 @@ public class WorldItemPickup : MonoBehaviour
     public KeyCode pickupKey = KeyCode.E;
     public bool destroyOnPickup = true;
 
+    [Tooltip("玩家与掉落物的拾取距离")]
+    public float pickupRange = 2f;
+
     private WorldItem worldItem;
-    private bool playerInRange;
+    private Transform player;
 
     void Awake()
     {
@@ -18,35 +21,24 @@ public class WorldItemPickup : MonoBehaviour
         {
             inventory = FindObjectOfType<InventoryManager>();
         }
+
+        MovementController controller = FindObjectOfType<MovementController>();
+        if (controller != null)
+        {
+            player = controller.transform;
+        }
     }
 
     void Update()
     {
-        if (!playerInRange) return;
+        if (player == null) return;
         if (!Input.GetKeyDown(pickupKey)) return;
 
-        TryPickup();
-    }
-
-    void OnTriggerEnter(Collider other)
-    {
-        if (IsPlayer(other))
+        float distance = Vector3.Distance(transform.position, player.position);
+        if (distance <= pickupRange)
         {
-            playerInRange = true;
+            TryPickup();
         }
-    }
-
-    void OnTriggerExit(Collider other)
-    {
-        if (IsPlayer(other))
-        {
-            playerInRange = false;
-        }
-    }
-
-    private bool IsPlayer(Collider other)
-    {
-        return other.GetComponentInParent<MovementController>() != null;
     }
 
     private void TryPickup()
