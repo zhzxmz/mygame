@@ -50,7 +50,15 @@ public class EnemyDrop : MonoBehaviour
             return;
         }
 
-        GameObject obj = Instantiate(worldItemPrefab, transform.position, Quaternion.identity);
+        Vector3 dropPosition = transform.position;
+
+        // 向下检测地面，避免掉落物生成在地面以下。
+        if (Physics.Raycast(dropPosition, Vector3.down, out RaycastHit hit, 50f))
+        {
+            dropPosition.y = hit.point.y + 0.1f;
+        }
+
+        GameObject obj = Instantiate(worldItemPrefab, dropPosition, Quaternion.identity);
 
         WorldItem worldItem = obj.GetComponent<WorldItem>();
         if (worldItem == null)
