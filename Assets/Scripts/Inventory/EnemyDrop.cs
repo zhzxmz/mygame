@@ -9,6 +9,9 @@ public class EnemyDrop : MonoBehaviour
     [Tooltip("掉落数量，最小为 1")]
     public int dropCount = 1;
 
+    [Tooltip("敌人死亡时给予玩家的经验值")]
+    public int experienceReward = 10;
+
     private Health health;
 
     void Awake()
@@ -17,6 +20,7 @@ public class EnemyDrop : MonoBehaviour
         if (health != null)
         {
             health.OnDeath += Drop;
+            health.OnDeath += GrantExperience;
         }
     }
 
@@ -33,6 +37,25 @@ public class EnemyDrop : MonoBehaviour
         if (health != null)
         {
             health.OnDeath -= Drop;
+            health.OnDeath -= GrantExperience;
+        }
+    }
+
+    private void GrantExperience()
+    {
+        if (experienceReward <= 0) return;
+
+        MovementController controller = FindObjectOfType<MovementController>();
+        if (controller == null) return;
+
+        PlayerProgression progression = controller.GetComponent<PlayerProgression>();
+        if (progression != null)
+        {
+            progression.AddXP(experienceReward);
+        }
+        else
+        {
+            Debug.LogWarning("EnemyDrop: 玩家缺少 PlayerProgression 组件，无法给予 XP");
         }
     }
 
