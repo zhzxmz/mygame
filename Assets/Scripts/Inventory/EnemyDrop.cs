@@ -1,13 +1,19 @@
 using UnityEngine;
 
+/// <summary>一条掉落配置：物品 + 数量。</summary>
+[System.Serializable]
+public class EnemyDropEntry
+{
+    public ItemData item;
+    public int count = 1;
+}
+
 public class EnemyDrop : MonoBehaviour
 {
-    public ItemData dropItem;
-
     public GameObject worldItemPrefab;
 
-    [Tooltip("掉落数量，最小为 1")]
-    public int dropCount = 1;
+    [Tooltip("掉落列表，敌人死亡时会生成所有物品")]
+    public EnemyDropEntry[] drops;
 
     [Tooltip("敌人死亡时给予玩家的经验值")]
     public int experienceReward = 10;
@@ -26,9 +32,14 @@ public class EnemyDrop : MonoBehaviour
 
     void OnValidate()
     {
-        if (dropCount < 1)
+        if (drops == null) return;
+
+        foreach (EnemyDropEntry drop in drops)
         {
-            dropCount = 1;
+            if (drop != null && drop.count < 1)
+            {
+                drop.count = 1;
+            }
         }
     }
 
@@ -67,29 +78,38 @@ public class EnemyDrop : MonoBehaviour
             return;
         }
 
-        if (dropItem == null)
+        if (drops == null || drops.Length == 0)
         {
-            Debug.LogWarning("EnemyDrop: dropItem 没赋值！");
+            Debug.LogWarning("EnemyDrop: drops 为空");
             return;
         }
 
-        Vector3 dropPosition = transform.position;
-
-        // 向下检测地面，避免掉落物生成在地面以下。
-        if (Physics.Raycast(dropPosition, Vector3.down, out RaycastHit hit, 50f))
+        foreach (EnemyDropEntry drop in drops)
         {
-            dropPosition.y = hit.point.y + 0.1f;
+            if (drop == null || drop.item == null)
+            {
+                Debug.LogWarning("EnemyDrop: 掉落项无效，跳过");
+                continue;
+            }
+
+            Vector3 dropPosition = transform.position;
+
+            // 向下检测地面，避免掉落物生成在地面以下。
+            if (Physics.Raycast(dropPosition, Vector3.down, out RaycastHit hit, 50f))
+            {
+                dropPosition.y = hit.point.y + 0.1f;
+            }
+
+            GameObject obj = Instantiate(worldItemPrefab, dropPosition, Quaternion.identity);
+
+            WorldItem worldItem = obj.GetComponent<WorldItem>();
+            if (worldItem == null)
+            {
+                Debug.LogWarning("EnemyDrop: Prefab 上没有 WorldItem 组件！");
+                continue;
+            }
+
+            worldItem.SetStack(new ItemStack(drop.item, drop.count));
         }
-
-        GameObject obj = Instantiate(worldItemPrefab, dropPosition, Quaternion.identity);
-
-        WorldItem worldItem = obj.GetComponent<WorldItem>();
-        if (worldItem == null)
-        {
-            Debug.LogWarning("EnemyDrop: Prefab 上没有 WorldItem 组件！");
-            return;
-        }
-
-        worldItem.SetStack(new ItemStack(dropItem, dropCount));
     }
 }
