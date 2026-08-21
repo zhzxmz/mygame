@@ -31,6 +31,12 @@ public class PlayerProgression : MonoBehaviour
             level++;
             Debug.Log($"Level Up! Level: {level}");
 
+            GameMessageUI messageUI = FindObjectOfType<GameMessageUI>();
+            if (messageUI != null)
+            {
+                messageUI.ShowMessage($"恭喜你升级了！当前等级：{level}");
+            }
+
             ApplyLevelUpStats();
 
             xpToNextLevel += 50;
