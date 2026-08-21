@@ -597,9 +597,6 @@ PrefabInstance:
       addedObject: {fileID: 1920533800499677591}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 53031b751b5f8f54ab48ed3e5e8c0a1c, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1367601228890379052}
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 53031b751b5f8f54ab48ed3e5e8c0a1c, type: 3}
-      insertIndex: -1
       addedObject: {fileID: 4628004609181542026}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 53031b751b5f8f54ab48ed3e5e8c0a1c, type: 3}
       insertIndex: -1
@@ -689,24 +686,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2316373e370c63048bad2c85961b1fab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  dropItem: {fileID: 11400000, guid: 3aa7944cf2291e848bd84fd42d05f7ad, type: 2}
   worldItemPrefab: {fileID: 4683009788293039507, guid: fed187a90b099c4499f8e4b68f4233db, type: 3}
-  dropCount: 5
---- !u!114 &1367601228890379052
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3711717526038114609}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2316373e370c63048bad2c85961b1fab, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  dropItem: {fileID: 11400000, guid: e1cda1f6ddd51bb4c9a1ee8508445cfa, type: 2}
-  worldItemPrefab: {fileID: 4683009788293039507, guid: fed187a90b099c4499f8e4b68f4233db, type: 3}
-  dropCount: 5
+  drops:
+  - item: {fileID: 11400000, guid: e1cda1f6ddd51bb4c9a1ee8508445cfa, type: 2}
+    count: 1
+  - item: {fileID: 11400000, guid: 3aa7944cf2291e848bd84fd42d05f7ad, type: 2}
+    count: 1
+  experienceReward: 20
 --- !u!114 &4628004609181542026
 MonoBehaviour:
   m_ObjectHideFlags: 0
