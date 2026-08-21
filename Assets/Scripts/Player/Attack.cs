@@ -7,15 +7,21 @@ public class Attack : MonoBehaviour
 
     public void DoAttack(Health target)
     {
-        CharacterState stats = target.GetComponent<CharacterState>();
+        if (target == null) return;
 
-        finalDamage = attackPower;
+        CharacterState attackerStats = GetComponent<CharacterState>();
+        CharacterState targetStats = target.GetComponent<CharacterState>();
 
-        if (stats != null)
+        // 优先使用攻击者身上的 CharacterState.attack，没有时回退到 attackPower
+        float baseDamage = attackerStats != null ? attackerStats.attack : attackPower;
+
+        // 保持现有目标防御计算逻辑
+        if (targetStats != null)
         {
-            finalDamage -= (int)stats.defense;
-            if (finalDamage < 0) finalDamage = 0;
+            baseDamage -= targetStats.defense;
         }
+
+        finalDamage = Mathf.Max(0, Mathf.RoundToInt(baseDamage));
 
         target.TakeDamage(finalDamage);
     }
