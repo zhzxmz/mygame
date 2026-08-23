@@ -37,6 +37,21 @@ public class PlayerProgression : MonoBehaviour
                 messageUI.ShowMessage($"恭喜你升级了！当前等级：{level}");
             }
 
+            PlayerResources resources = GetComponent<PlayerResources>();
+            if (resources != null)
+            {
+                resources.AddGrowthResource(1);
+
+                if (messageUI != null)
+                {
+                    messageUI.ShowMessage("获得成长资源 ×1");
+                }
+            }
+            else
+            {
+                Debug.LogWarning("PlayerProgression: 玩家缺少 PlayerResources 组件，无法获得成长资源");
+            }
+
             ApplyLevelUpStats();
 
             xpToNextLevel += 50;
