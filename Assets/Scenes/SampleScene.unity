@@ -1975,6 +1975,7 @@ GameObject:
   - component: {fileID: 616678775}
   - component: {fileID: 616678776}
   - component: {fileID: 616678777}
+  - component: {fileID: 616678778}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -2192,6 +2193,20 @@ MonoBehaviour:
   attackPerLevel: 2
   defensePerLevel: 1
   maxHpPerLevel: 10
+--- !u!114 &616678778
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 616678764}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eb26da77c40dbbe41949e48027535414, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  soulFragments: 0
+  growthResource: 0
 --- !u!1 &645266639
 GameObject:
   m_ObjectHideFlags: 0
@@ -5706,7 +5721,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1920533800499677591, guid: cce2464f1d4019f45a33c76088811afb, type: 3}
       propertyPath: experienceReward
-      value: 20
+      value: 50
       objectReference: {fileID: 0}
     - target: {fileID: 1920533800499677591, guid: cce2464f1d4019f45a33c76088811afb, type: 3}
       propertyPath: drops.Array.data[0].item

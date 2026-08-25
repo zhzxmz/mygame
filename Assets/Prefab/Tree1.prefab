@@ -692,7 +692,7 @@ MonoBehaviour:
     count: 1
   - item: {fileID: 11400000, guid: 3aa7944cf2291e848bd84fd42d05f7ad, type: 2}
     count: 1
-  experienceReward: 20
+  experienceReward: 50
 --- !u!114 &4628004609181542026
 MonoBehaviour:
   m_ObjectHideFlags: 0
