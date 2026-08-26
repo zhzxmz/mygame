@@ -5,8 +5,6 @@ public class MouseLock : MonoBehaviour
     /// <summary>是否处于 UI 输入状态。由 UIInputManager 统一计算。</summary>
     public static bool IsUIBlocking => UIInputManager.AnyUIOpen;
 
-    public CameraController cameraController; // 拖拽赋值
-
     private bool mouseFree;
     private bool wasUIBlocking;
 
@@ -14,7 +12,6 @@ public class MouseLock : MonoBehaviour
     {
         mouseFree = false;
         LockCursor();
-        EnableCameraControl(true);
     }
 
     void Update()
@@ -30,7 +27,6 @@ public class MouseLock : MonoBehaviour
             // UI 打开时鼠标必须自由，Alt 不参与切换。
             wasUIBlocking = true;
             UnlockCursor();
-            EnableCameraControl(false);
             return;
         }
 
@@ -49,12 +45,10 @@ public class MouseLock : MonoBehaviour
         if (mouseFree)
         {
             UnlockCursor();
-            EnableCameraControl(false);
         }
         else
         {
             LockCursor();
-            EnableCameraControl(true);
         }
     }
 
@@ -68,13 +62,5 @@ public class MouseLock : MonoBehaviour
     {
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
-    }
-
-    private void EnableCameraControl(bool enable)
-    {
-        if (cameraController != null)
-        {
-            cameraController.enabled = enable;
-        }
     }
 }
