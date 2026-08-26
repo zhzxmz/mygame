@@ -75,6 +75,8 @@ public class GameManager : MonoBehaviour
             playerHealth.OnDeath -= HandlePlayerDeath;
         }
 
+        UIInputManager.Unregister(this);
+
         if (Instance == this)
         {
             Instance = null;
@@ -84,6 +86,9 @@ public class GameManager : MonoBehaviour
     private void HandlePlayerDeath()
     {
         SetState(GameState.GameOver);
+
+        // 注册为 UI 状态，确保 Game Over 期间鼠标保持自由
+        UIInputManager.Register(this);
 
         // 解锁鼠标，确保 Game Over UI 可以点击
         Cursor.lockState = CursorLockMode.None;
@@ -99,6 +104,7 @@ public class GameManager : MonoBehaviour
 
     public void RestartGame()
     {
+        UIInputManager.Unregister(this);
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 

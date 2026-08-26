@@ -11,7 +11,7 @@ public class BagOpen : MonoBehaviour
         if (inventoryPanel != null)
         {
             inventoryPanel.SetActive(false);
-            MouseLock.IsUIBlocking = false;
+            UIInputManager.Unregister(this);
         }
     }
 
@@ -21,7 +21,20 @@ public class BagOpen : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.B) && inventoryPanel != null)
         {
             inventoryPanel.SetActive(!inventoryPanel.activeSelf);
-            MouseLock.IsUIBlocking = inventoryPanel.activeSelf;
+
+            if (inventoryPanel.activeSelf)
+            {
+                UIInputManager.Register(this);
+            }
+            else
+            {
+                UIInputManager.Unregister(this);
+            }
         }
+    }
+
+    void OnDestroy()
+    {
+        UIInputManager.Unregister(this);
     }
 }

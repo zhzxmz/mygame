@@ -2,20 +2,45 @@ using UnityEngine;
 
 public class MouseLock : MonoBehaviour
 {
-    /// <summary>是否处于 UI 输入状态（例如背包打开）。为 true 时释放鼠标并停止游戏输入。</summary>
-    public static bool IsUIBlocking { get; set; }
+    /// <summary>是否处于 UI 输入状态。由 UIInputManager 统一计算。</summary>
+    public static bool IsUIBlocking => UIInputManager.AnyUIOpen;
 
     public CameraController cameraController; // 拖拽赋值
-    
+
+    private bool mouseFree;
+    private bool wasUIBlocking;
+
     void Start()
     {
+        mouseFree = false;
         LockCursor();
         EnableCameraControl(true);
     }
 
     void Update()
     {
-        if (IsUIBlocking || Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt))
+        if (UIInputManager.AnyUIOpen)
+        {
+            // UI 打开时鼠标必须自由，Alt 不参与切换。
+            wasUIBlocking = true;
+            UnlockCursor();
+            EnableCameraControl(false);
+            return;
+        }
+
+        // 所有 UI 关闭后，不自动重新锁定鼠标，保持自由直到玩家按 Alt。
+        if (wasUIBlocking)
+        {
+            wasUIBlocking = false;
+            mouseFree = true;
+        }
+
+        if (Input.GetKeyDown(KeyCode.LeftAlt) || Input.GetKeyDown(KeyCode.RightAlt))
+        {
+            mouseFree = !mouseFree;
+        }
+
+        if (mouseFree)
         {
             UnlockCursor();
             EnableCameraControl(false);

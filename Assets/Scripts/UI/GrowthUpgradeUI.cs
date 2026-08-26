@@ -84,12 +84,12 @@ public class GrowthUpgradeUI : MonoBehaviour
 
         if (panel.activeSelf)
         {
-            MouseLock.IsUIBlocking = true;
+            UIInputManager.Register(this);
             RefreshGrowthText();
         }
         else
         {
-            MouseLock.IsUIBlocking = false;
+            UIInputManager.Unregister(this);
         }
     }
 
@@ -98,7 +98,12 @@ public class GrowthUpgradeUI : MonoBehaviour
         if (panel == null) return;
 
         panel.SetActive(false);
-        MouseLock.IsUIBlocking = false;
+        UIInputManager.Unregister(this);
+    }
+
+    void OnDestroy()
+    {
+        UIInputManager.Unregister(this);
     }
 
     private void UpgradeAttack()
