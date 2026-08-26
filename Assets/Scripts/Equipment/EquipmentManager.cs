@@ -8,18 +8,41 @@ public class EquipmentManager : MonoBehaviour
 {
     public ItemData equippedWeapon;
 
+    [SerializeField] private ItemData testWeapon;
+
     private CharacterState stats;
     private float appliedAttackBonus;
 
     void Awake()
     {
         stats = GetComponent<CharacterState>();
+
+        if (stats == null)
+        {
+            Debug.LogWarning("EquipmentManager: 玩家缺少 CharacterState 组件，无法应用装备属性");
+        }
+    }
+
+    void Start()
+    {
+        // 如果 Inspector 中已经指定了 equippedWeapon，则在启动时应用它的攻击加成。
+        // 注意：不会自动装备 testWeapon。
+        if (equippedWeapon != null && stats != null && appliedAttackBonus == 0f)
+        {
+            appliedAttackBonus = equippedWeapon.attackBonus;
+            stats.attack += appliedAttackBonus;
+        }
     }
 
     public bool Equip(ItemData item)
     {
         if (item == null) return false;
-        if (stats == null) return false;
+
+        if (stats == null)
+        {
+            Debug.LogWarning("EquipmentManager: 缺少 CharacterState 组件，无法装备");
+            return false;
+        }
 
         // 先移除旧武器提供的攻击加成
         if (equippedWeapon != null)
@@ -38,7 +61,11 @@ public class EquipmentManager : MonoBehaviour
     {
         if (equippedWeapon == null) return;
 
-        if (stats != null)
+        if (stats == null)
+        {
+            Debug.LogWarning("EquipmentManager: 缺少 CharacterState 组件，无法卸下装备");
+        }
+        else
         {
             stats.attack -= appliedAttackBonus;
         }
@@ -52,9 +79,34 @@ public class EquipmentManager : MonoBehaviour
         return equippedWeapon;
     }
 
-    /// <summary>测试辅助：直接装备指定物品。</summary>
-    public void TestEquip(ItemData item)
+    /// <summary>测试辅助：装备 Inspector 中指定的 testWeapon。</summary>
+    public void TestEquip()
     {
-        Equip(item);
+        if (testWeapon == null)
+        {
+            Debug.LogWarning("EquipmentManager: testWeapon 未指定");
+            return;
+        }
+
+        if (stats == null)
+        {
+            Debug.LogWarning("EquipmentManager: 缺少 CharacterState 组件，无法测试装备");
+            return;
+        }
+
+        float beforeAttack = stats.attack;
+        float beforeBonus = appliedAttackBonus;
+
+        bool result = Equip(testWeapon);
+
+        Debug.Log(
+            $"EquipmentManager TestEquip: result={result}, " +
+            $"weapon={testWeapon.itemName}, " +
+            $"attackBonus={testWeapon.attackBonus}, " +
+            $"beforeAttack={beforeAttack}, " +
+            $"beforeAppliedBonus={beforeBonus}, " +
+            $"afterAttack={stats.attack}, " +
+            $"appliedAttackBonus={appliedAttackBonus}"
+        );
     }
 }
