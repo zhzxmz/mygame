@@ -9,7 +9,8 @@ public class Attack : MonoBehaviour
     {
         if (target == null) return;
 
-        CharacterState attackerStats = GetComponent<CharacterState>();
+        // Attack 可能挂在剑/子物体上，因此用 GetComponentInParent 获取玩家 CharacterState
+        CharacterState attackerStats = GetComponentInParent<CharacterState>();
         CharacterState targetStats = target.GetComponent<CharacterState>();
 
         // 优先使用攻击者身上的 CharacterState.attack，没有时回退到 attackPower
