@@ -4,8 +4,9 @@ using UnityEditor;
 using TMPro;
 
 /// <summary>
-/// Unity Editor Builder：在当前场景 Canvas 下永久创建成长强化 UI。
+/// Unity Editor Builder：在当前场景 Canvas 下创建或修复成长强化 UI。
 /// 通过菜单 Tools > GrowthUpgrade > Create UI 执行。
+/// 已存在的 UI 不会被重复创建，只会补齐缺失部分。
 /// </summary>
 public static class GrowthUpgradeUIBuilder
 {
@@ -19,30 +20,27 @@ public static class GrowthUpgradeUIBuilder
             return;
         }
 
-        if (canvas.transform.Find("GrowthUpgradePanel") != null)
-        {
-            Debug.LogWarning("GrowthUpgradeUIBuilder: GrowthUpgradePanel 已存在，取消创建");
-            return;
-        }
-
         int undoGroup = Undo.GetCurrentGroup();
-        Undo.SetCurrentGroupName("Create Growth Upgrade UI");
+        Undo.SetCurrentGroupName("Create/Repair Growth Upgrade UI");
 
         // 外部打开按钮
-        Button growthButton = CreateButton(canvas.transform, "GrowthButton", "成长强化", new Vector2(0f, -160f), new Vector2(160f, 40f));
+        Button growthButton = FindOrCreateButton(canvas.transform, "GrowthButton", "成长强化", new Vector2(0f, -160f), new Vector2(160f, 40f));
 
         // 强化面板
-        GameObject panel = CreatePanel(canvas.transform, "GrowthUpgradePanel");
+        GameObject panel = FindOrCreatePanel(canvas.transform, "GrowthUpgradePanel");
 
-        GrowthUpgradeUI ui = panel.AddComponent<GrowthUpgradeUI>();
-        Undo.RegisterCreatedObjectUndo(ui, "Add GrowthUpgradeUI");
+        GrowthUpgradeUI ui = panel.GetComponent<GrowthUpgradeUI>();
+        if (ui == null)
+        {
+            ui = Undo.AddComponent<GrowthUpgradeUI>(panel);
+        }
 
         ui.panel = panel;
-        ui.growthText = CreateText(panel.transform, "GrowthText", "Growth: 0", new Vector2(0f, 120f), new Vector2(260f, 40f));
-        ui.attackButton = CreateButton(panel.transform, "AttackButton", "攻击 +5", new Vector2(0f, 60f), new Vector2(200f, 40f));
-        ui.defenseButton = CreateButton(panel.transform, "DefenseButton", "防御 +3", new Vector2(0f, 10f), new Vector2(200f, 40f));
-        ui.maxHPButton = CreateButton(panel.transform, "MaxHPButton", "最大生命 +20", new Vector2(0f, -40f), new Vector2(200f, 40f));
-        ui.closeButton = CreateButton(panel.transform, "CloseButton", "关闭", new Vector2(0f, -100f), new Vector2(200f, 40f));
+        ui.growthText = FindOrCreateText(panel.transform, "GrowthText", "Growth: 0", new Vector2(0f, 120f), new Vector2(260f, 40f));
+        ui.attackButton = FindOrCreateButton(panel.transform, "AttackButton", "攻击 +5", new Vector2(0f, 60f), new Vector2(200f, 40f));
+        ui.defenseButton = FindOrCreateButton(panel.transform, "DefenseButton", "防御 +3", new Vector2(0f, 10f), new Vector2(200f, 40f));
+        ui.maxHPButton = FindOrCreateButton(panel.transform, "MaxHPButton", "最大生命 +20", new Vector2(0f, -40f), new Vector2(200f, 40f));
+        ui.closeButton = FindOrCreateButton(panel.transform, "CloseButton", "关闭", new Vector2(0f, -100f), new Vector2(200f, 40f));
         ui.toggleButton = growthButton;
 
         panel.SetActive(false);
@@ -50,7 +48,94 @@ public static class GrowthUpgradeUIBuilder
         Selection.activeGameObject = panel;
         Undo.CollapseUndoOperations(undoGroup);
 
-        Debug.Log("GrowthUpgradeUIBuilder: 创建完成");
+        Debug.Log("GrowthUpgradeUIBuilder: 创建/修复完成");
+    }
+
+    private static GameObject FindOrCreatePanel(Transform parent, string name)
+    {
+        Transform existing = parent.Find(name);
+        if (existing != null)
+        {
+            GameObject go = existing.gameObject;
+            if (go.GetComponent<Image>() == null)
+            {
+                Undo.AddComponent<Image>(go);
+            }
+
+            return go;
+        }
+
+        return CreatePanel(parent, name);
+    }
+
+    private static Button FindOrCreateButton(Transform parent, string name, string label, Vector2 anchoredPosition, Vector2 size)
+    {
+        Transform existing = parent.Find(name);
+        if (existing == null)
+        {
+            return CreateButton(parent, name, label, anchoredPosition, size);
+        }
+
+        GameObject go = existing.gameObject;
+
+        if (go.GetComponent<Image>() == null)
+        {
+            Undo.AddComponent<Image>(go);
+        }
+
+        Button button = go.GetComponent<Button>();
+        if (button == null)
+        {
+            button = Undo.AddComponent<Button>(go);
+        }
+
+        Transform textTransform = go.transform.Find("Text");
+        TextMeshProUGUI tmp;
+        if (textTransform != null)
+        {
+            tmp = textTransform.GetComponent<TextMeshProUGUI>();
+            if (tmp == null)
+            {
+                tmp = Undo.AddComponent<TextMeshProUGUI>(textTransform.gameObject);
+            }
+        }
+        else
+        {
+            tmp = CreateText(go.transform, "Text", label, Vector2.zero, size);
+        }
+
+        Undo.RecordObject(tmp, "Configure Text");
+        tmp.text = label;
+        tmp.fontSize = 20;
+        tmp.color = Color.white;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.enableWordWrapping = false;
+
+        return button;
+    }
+
+    private static TextMeshProUGUI FindOrCreateText(Transform parent, string name, string content, Vector2 anchoredPosition, Vector2 size)
+    {
+        Transform existing = parent.Find(name);
+        if (existing != null)
+        {
+            TextMeshProUGUI tmp = existing.GetComponent<TextMeshProUGUI>();
+            if (tmp == null)
+            {
+                tmp = Undo.AddComponent<TextMeshProUGUI>(existing.gameObject);
+            }
+
+            Undo.RecordObject(tmp, "Configure Text");
+            tmp.text = content;
+            tmp.fontSize = 20;
+            tmp.color = Color.white;
+            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.enableWordWrapping = false;
+
+            return tmp;
+        }
+
+        return CreateText(parent, name, content, anchoredPosition, size);
     }
 
     private static GameObject CreatePanel(Transform parent, string name)
