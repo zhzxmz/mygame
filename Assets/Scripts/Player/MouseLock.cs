@@ -5,9 +5,13 @@ public class MouseLock : MonoBehaviour
     /// <summary>是否处于 UI 输入状态。由 UIInputManager 统一计算。</summary>
     public static bool IsUIBlocking => UIInputManager.AnyUIOpen;
 
+    private bool uiMode;
+    private bool wasUIBlocking;
+
     void Start()
     {
-        LockCursor();
+        uiMode = false;
+        ApplyCursor();
     }
 
     void Update()
@@ -18,25 +22,46 @@ public class MouseLock : MonoBehaviour
             return;
         }
 
-        if (UIInputManager.AnyUIOpen)
+        bool uiOpen = UIInputManager.AnyUIOpen;
+
+        if (uiOpen)
         {
-            UnlockCursor();
+            // 任何 UI 打开时，强制进入 UI 操作状态。
+            if (!wasUIBlocking)
+            {
+                wasUIBlocking = true;
+                uiMode = true;
+            }
         }
         else
         {
-            LockCursor();
+            if (wasUIBlocking)
+            {
+                // 最后一个 UI 刚关闭：自动恢复游戏控制状态。
+                wasUIBlocking = false;
+                uiMode = false;
+            }
+            else if (Input.GetKeyDown(KeyCode.LeftAlt) || Input.GetKeyDown(KeyCode.RightAlt))
+            {
+                // 没有 UI 时，Alt 在游戏控制 / UI 操作之间切换。
+                uiMode = !uiMode;
+            }
         }
+
+        ApplyCursor();
     }
 
-    private void LockCursor()
+    private void ApplyCursor()
     {
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
-    }
-
-    private void UnlockCursor()
-    {
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        if (uiMode)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+        else
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
     }
 }
