@@ -13,7 +13,10 @@ public class Attack : MonoBehaviour
         CharacterState targetStats = target.GetComponent<CharacterState>();
 
         // 优先使用攻击者身上的 CharacterState.attack，没有时回退到 attackPower
-        float baseDamage = attackerStats != null ? attackerStats.attack : attackPower;
+        float rawAttack = attackerStats != null ? attackerStats.attack : attackPower;
+        float baseDamage = rawAttack;
+
+        float targetDefense = targetStats != null ? targetStats.defense : 0f;
 
         // 保持现有目标防御计算逻辑
         if (targetStats != null)
@@ -23,6 +26,17 @@ public class Attack : MonoBehaviour
 
         finalDamage = Mathf.Max(0, Mathf.RoundToInt(baseDamage));
 
+        float beforeHP = target.currentHP;
+        Debug.Log(
+            $"Attack Debug: AttackerATK={rawAttack}, " +
+            $"TargetDEF={targetDefense}, " +
+            $"BaseDamage={baseDamage}, " +
+            $"FinalDamage={finalDamage}, " +
+            $"TargetHPBefore={beforeHP}"
+        );
+
         target.TakeDamage(finalDamage);
+
+        Debug.Log($"Attack Debug: TargetHPAfter={target.currentHP}");
     }
 }
