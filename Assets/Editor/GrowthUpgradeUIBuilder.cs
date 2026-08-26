@@ -99,7 +99,6 @@ public static class GrowthUpgradeUIBuilder
     private static TextMeshProUGUI CreateText(Transform parent, string name, string content, Vector2 anchoredPosition, Vector2 size)
     {
         GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
-        Undo.RegisterCreatedObjectUndo(go, "Create " + name);
 
         go.transform.SetParent(parent, false);
 
@@ -116,6 +115,9 @@ public static class GrowthUpgradeUIBuilder
         tmp.color = Color.white;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.enableWordWrapping = false;
+
+        // 注册整个层级，确保 TMP 自动生成的 SubMeshUI 子物体也能被 Undo 正确处理。
+        Undo.RegisterFullObjectHierarchyUndo(go, "Create " + name);
 
         return tmp;
     }
