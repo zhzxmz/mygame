@@ -1,40 +1,31 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class BagOpen : MonoBehaviour
 {
-    // Start is called before the first frame update
     public GameObject inventoryPanel;
+
+    private UIWindow window;
+
     void Start()
     {
         if (inventoryPanel != null)
         {
-            inventoryPanel.SetActive(false);
-            UIInputManager.Unregister(this);
+            window = inventoryPanel.GetComponent<UIWindow>();
+            if (window == null)
+            {
+                window = inventoryPanel.AddComponent<UIWindow>();
+            }
+
+            window.target = inventoryPanel;
+            window.Close();
         }
     }
 
-    // Update is called once per frame
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.B) && inventoryPanel != null)
+        if (Input.GetKeyDown(KeyCode.B) && window != null)
         {
-            inventoryPanel.SetActive(!inventoryPanel.activeSelf);
-
-            if (inventoryPanel.activeSelf)
-            {
-                UIInputManager.Register(this);
-            }
-            else
-            {
-                UIInputManager.Unregister(this);
-            }
+            window.Toggle();
         }
-    }
-
-    void OnDestroy()
-    {
-        UIInputManager.Unregister(this);
     }
 }

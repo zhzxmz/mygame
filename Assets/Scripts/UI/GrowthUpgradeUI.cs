@@ -28,6 +28,7 @@ public class GrowthUpgradeUI : MonoBehaviour
     public Button toggleButton;
 
     private int lastGrowth = -1;
+    private UIWindow window;
 
     void Awake()
     {
@@ -53,7 +54,14 @@ public class GrowthUpgradeUI : MonoBehaviour
     {
         if (panel != null)
         {
-            panel.SetActive(false);
+            window = panel.GetComponent<UIWindow>();
+            if (window == null)
+            {
+                window = panel.AddComponent<UIWindow>();
+            }
+
+            window.target = panel;
+            window.Close();
         }
 
         BindButton(attackButton, UpgradeAttack);
@@ -78,32 +86,21 @@ public class GrowthUpgradeUI : MonoBehaviour
 
     public void TogglePanel()
     {
-        if (panel == null) return;
+        if (window == null) return;
 
-        panel.SetActive(!panel.activeSelf);
+        window.Toggle();
 
-        if (panel.activeSelf)
+        if (window.IsOpen)
         {
-            UIInputManager.Register(this);
             RefreshGrowthText();
-        }
-        else
-        {
-            UIInputManager.Unregister(this);
         }
     }
 
     public void ClosePanel()
     {
-        if (panel == null) return;
+        if (window == null) return;
 
-        panel.SetActive(false);
-        UIInputManager.Unregister(this);
-    }
-
-    void OnDestroy()
-    {
-        UIInputManager.Unregister(this);
+        window.Close();
     }
 
     private void UpgradeAttack()

@@ -19,6 +19,12 @@ public class MouseLock : MonoBehaviour
 
     void Update()
     {
+        if (Input.GetKeyDown(KeyCode.Escape) && UIWindowStack.AnyOpen)
+        {
+            UIWindowStack.CloseTopWindow();
+            return;
+        }
+
         if (UIInputManager.AnyUIOpen)
         {
             // UI 打开时鼠标必须自由，Alt 不参与切换。
