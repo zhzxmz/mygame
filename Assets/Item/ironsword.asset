@@ -12,8 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8d6245c5c74f0ff45a0fe82b24ebc59c, type: 3}
   m_Name: ironsword
   m_EditorClassIdentifier: 
-  itemName: 
+  itemName: "\u94C1\u5251"
   icon: {fileID: 0}
+  itemType: 1
+  equipmentSlot: 1
   stackable: 1
   maxStack: 99
   attackBonus: 100

@@ -119,6 +119,15 @@ public class InventoryEquipUI : MonoBehaviour
             return;
         }
 
+        Debug.Log(
+            $"[EquipmentDebug] Pre-call: equipmentController={equipmentController != null}, " +
+            $"inventory={equipmentController.inventory != null}, " +
+            $"equipmentManager={equipmentController.equipmentManager != null}, " +
+            $"itemType={selected.Item.itemType}, " +
+            $"slot={selected.Item.equipmentSlot}, " +
+            $"hasItem={(equipmentController.inventory != null && equipmentController.inventory.HasItem(selected.Item, 1))}"
+        );
+
         bool result = equipmentController.TryEquipFromInventory(selected.Item);
         Debug.Log($"[EquipmentDebug] TryEquipFromInventory result: {result}");
         if (result)

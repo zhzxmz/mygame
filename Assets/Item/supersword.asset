@@ -14,10 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: 
   icon: {fileID: 0}
-  itemType: 0
-  equipmentSlot: 0
+  itemType: 1
+  equipmentSlot: 1
   stackable: 1
   maxStack: 99
-  attackBonus: 0
-  defenseBonus: 0
-  maxHPBonus: 0
+  attackBonus: 500
+  defenseBonus: 500
+  maxHPBonus: 500
