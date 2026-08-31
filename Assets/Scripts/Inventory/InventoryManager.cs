@@ -12,6 +12,15 @@ public class InventoryManager : MonoBehaviour
 
     void Awake()
     {
+        if (slots == null || slots.Length == 0)
+        {
+            slots = FindObjectsOfType<InventorySlot>();
+            if (slots != null && slots.Length > 0)
+            {
+                Debug.Log($"InventoryManager: 自动找到 {slots.Length} 个背包槽");
+            }
+        }
+
         EnsureItems();
         RefreshAllSlots();
     }
