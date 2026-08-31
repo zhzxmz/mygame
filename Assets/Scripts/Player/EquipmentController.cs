@@ -18,6 +18,11 @@ public class EquipmentController : MonoBehaviour
             inventory = GetComponent<InventoryManager>();
             if (inventory == null)
             {
+                inventory = FindObjectOfType<InventoryManager>();
+            }
+
+            if (inventory == null)
+            {
                 Debug.LogWarning("EquipmentController: 未找到 InventoryManager");
             }
         }

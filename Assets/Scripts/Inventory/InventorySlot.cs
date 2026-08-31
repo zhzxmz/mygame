@@ -1,15 +1,18 @@
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using TMPro;
 
-public class InventorySlot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
+public class InventorySlot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler
 {
     public Image icon;
     public TextMeshProUGUI countText;
 
     private ItemStack stack;
     private GameObject dragVisual;
+
+    public event Action<InventorySlot> OnSlotClicked;
 
     public ItemStack Stack => stack;
 
@@ -63,6 +66,13 @@ public class InventorySlot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
     {
         Debug.Log($"[InventorySlot] OnEndDrag: {gameObject.name}");
         DestroyDragVisual();
+    }
+
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (IsEmpty()) return;
+
+        OnSlotClicked?.Invoke(this);
     }
 
     private void CreateDragVisual(Vector2 position)
