@@ -11,6 +11,8 @@ public class InventoryEquipUI : MonoBehaviour
     public EquipmentController equipmentController;
     public InventoryManager inventoryManager;
 
+    private bool warnedNotInteractable;
+
     void Awake()
     {
         if (equipmentController == null)
@@ -30,9 +32,14 @@ public class InventoryEquipUI : MonoBehaviour
 
     void Start()
     {
-        if (equipButton != null && equipButton.onClick.GetPersistentEventCount() == 0)
+        if (equipButton != null)
         {
+            equipButton.onClick.RemoveListener(OnEquipClicked);
             equipButton.onClick.AddListener(OnEquipClicked);
+        }
+        else
+        {
+            Debug.LogWarning("[EquipmentDebug] equipButton is NULL");
         }
 
         if (inventoryManager != null)
@@ -70,6 +77,16 @@ public class InventoryEquipUI : MonoBehaviour
     {
         if (equipButton == null) return;
 
+        if (!equipButton.interactable && !warnedNotInteractable)
+        {
+            Debug.Log("[EquipmentDebug] Equip button is not interactable");
+            warnedNotInteractable = true;
+        }
+        else if (equipButton.interactable)
+        {
+            warnedNotInteractable = false;
+        }
+
         ItemStack selected = InventorySelection.SelectedStack;
         bool canEquip = selected != null &&
                         selected.Item != null &&
@@ -89,6 +106,8 @@ public class InventoryEquipUI : MonoBehaviour
 
     private void OnEquipClicked()
     {
+        Debug.Log("[EquipmentDebug] Equip button clicked");
+
         ItemStack selected = InventorySelection.SelectedStack;
         Debug.Log($"[EquipmentDebug] Equip button clicked, selected={(selected != null && selected.Item != null ? selected.Item.itemName : "NULL")}");
 
