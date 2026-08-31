@@ -12,6 +12,8 @@ public class WorldItemPickup : MonoBehaviour
 
     private WorldItem worldItem;
     private Transform player;
+    private bool warnedNoPlayer;
+    private bool warnedNoInventory;
 
     void Awake()
     {
@@ -31,7 +33,17 @@ public class WorldItemPickup : MonoBehaviour
 
     void Update()
     {
-        if (player == null) return;
+        if (player == null)
+        {
+            if (!warnedNoPlayer)
+            {
+                Debug.LogWarning("WorldItemPickup: 未找到玩家，无法拾取");
+                warnedNoPlayer = true;
+            }
+
+            return;
+        }
+
         if (!Input.GetKeyDown(pickupKey)) return;
 
         float distance = Vector3.Distance(transform.position, player.position);
@@ -45,7 +57,12 @@ public class WorldItemPickup : MonoBehaviour
     {
         if (inventory == null)
         {
-            Debug.LogWarning("WorldItemPickup: 没有找到 InventoryManager，无法拾取物品");
+            if (!warnedNoInventory)
+            {
+                Debug.LogWarning("WorldItemPickup: 没有找到 InventoryManager，无法拾取物品");
+                warnedNoInventory = true;
+            }
+
             return;
         }
 
@@ -58,6 +75,7 @@ public class WorldItemPickup : MonoBehaviour
         int added = inventory.AddItem(worldItem.Item, worldItem.Count);
         if (added <= 0)
         {
+            Debug.LogWarning($"WorldItemPickup: 无法拾取 {worldItem.Item.itemName}，背包可能已满或添加失败");
             return;
         }
 
