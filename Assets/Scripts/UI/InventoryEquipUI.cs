@@ -125,6 +125,15 @@ public class InventoryEquipUI : MonoBehaviour
             return;
         }
 
+        Debug.Log($"[InventoryDebug] Selected Slot Stack = {selected.Item.itemName} x{selected.Count}");
+        Debug.Log($"[InventoryDebug] Selected Slot Item reference/hash = {selected.Item.GetInstanceID()}");
+        Debug.Log($"[InventoryDebug] InventoryManager instance ID = {inventoryManager?.GetInstanceID()}");
+
+        if (inventoryManager != null)
+        {
+            inventoryManager.DebugLogInventory(selected.Item);
+        }
+
         Debug.Log(
             $"[EquipmentDebug] Pre-call: equipmentController={equipmentController != null}, " +
             $"inventory={equipmentController.inventory != null}, " +

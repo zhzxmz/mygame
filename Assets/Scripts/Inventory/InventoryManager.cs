@@ -171,6 +171,31 @@ public class InventoryManager : MonoBehaviour
         return GetItemCount(item) >= count;
     }
 
+    /// <summary>诊断用：输出当前 items 数据与指定 ItemData 的匹配情况。</summary>
+    public void DebugLogInventory(ItemData target)
+    {
+        Debug.Log($"[InventoryDebug] Internal items length = {items?.Length ?? 0}");
+
+        if (items != null)
+        {
+            for (int i = 0; i < items.Length; i++)
+            {
+                ItemStack stack = items[i];
+                if (stack != null)
+                {
+                    Debug.Log($"[InventoryDebug] items[{i}] = {stack.Item?.name} x{stack.Count} ref={stack.Item?.GetInstanceID()}");
+                }
+                else
+                {
+                    Debug.Log($"[InventoryDebug] items[{i}] = NULL");
+                }
+            }
+        }
+
+        Debug.Log($"[InventoryDebug] HasItem searching for = {target?.name} ref={target?.GetInstanceID()}");
+        Debug.Log($"[InventoryDebug] Match found = {HasItem(target, 1)}");
+    }
+
     /// <summary>
     /// 预检查背包能否容纳指定数量的物品。
     /// 只检查，不修改 items、InventorySlot，也不会触发 InventoryChanged。
