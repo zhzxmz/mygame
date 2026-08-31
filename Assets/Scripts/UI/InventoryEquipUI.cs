@@ -28,6 +28,12 @@ public class InventoryEquipUI : MonoBehaviour
         {
             inventoryManager = FindObjectOfType<InventoryManager>();
         }
+
+        if (equipmentController != null && inventoryManager != null && equipmentController.inventory != inventoryManager)
+        {
+            Debug.Log("[EquipmentDebug] Assign EquipmentController.inventory to UI InventoryManager");
+            equipmentController.inventory = inventoryManager;
+        }
     }
 
     void Start()
@@ -123,6 +129,7 @@ public class InventoryEquipUI : MonoBehaviour
             $"[EquipmentDebug] Pre-call: equipmentController={equipmentController != null}, " +
             $"inventory={equipmentController.inventory != null}, " +
             $"equipmentManager={equipmentController.equipmentManager != null}, " +
+            $"sameInventory={inventoryManager == equipmentController.inventory}, " +
             $"itemType={selected.Item.itemType}, " +
             $"slot={selected.Item.equipmentSlot}, " +
             $"hasItem={(equipmentController.inventory != null && equipmentController.inventory.HasItem(selected.Item, 1))}"
