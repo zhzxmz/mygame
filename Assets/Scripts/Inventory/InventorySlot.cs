@@ -35,12 +35,26 @@ public class InventorySlot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
     {
         this.stack = stack;
 
+        Debug.Log(
+            $"[InventoryTrace] Slot.SetStack " +
+            $"Slot={name} SlotID={GetInstanceID()} " +
+            $"Item={stack?.Item?.itemName} " +
+            $"ItemID={stack?.Item?.GetInstanceID()} " +
+            $"Frame={Time.frameCount}"
+        );
+
         Refresh();
     }
 
     public void Clear()
     {
         stack = null;
+
+        Debug.Log(
+            $"[InventoryTrace] Slot.Clear " +
+            $"Slot={name} SlotID={GetInstanceID()} " +
+            $"Frame={Time.frameCount}"
+        );
 
         Refresh();
     }

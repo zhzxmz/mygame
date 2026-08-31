@@ -21,6 +21,8 @@ public class InventoryManager : MonoBehaviour
             }
         }
 
+        Debug.Log($"[InventoryTrace] Awake Manager={name} InstanceID={GetInstanceID()} slots={(slots != null ? slots.Length : 0)}");
+
         EnsureItems();
         RefreshAllSlots();
     }
@@ -93,6 +95,15 @@ public class InventoryManager : MonoBehaviour
         int added = count - remaining;
         if (added > 0)
         {
+            Debug.Log(
+                $"[InventoryTrace] AddItem SUCCESS " +
+                $"ManagerID={GetInstanceID()} " +
+                $"Item={item.itemName} " +
+                $"ItemID={item.GetInstanceID()} " +
+                $"Frame={Time.frameCount}"
+            );
+
+            LogItemsState();
             InventoryChanged?.Invoke();
         }
 
@@ -196,6 +207,40 @@ public class InventoryManager : MonoBehaviour
         Debug.Log($"[InventoryDebug] Match found = {HasItem(target, 1)}");
     }
 
+    /// <summary>诊断用：输出 items 与 UI Slot 的完整对照。</summary>
+    public void DebugInventoryState()
+    {
+        Debug.Log($"[InventoryTrace] ManagerID={GetInstanceID()}");
+        Debug.Log($"[InventoryTrace] SlotsCount={slots?.Length ?? 0}");
+        Debug.Log($"[InventoryTrace] ItemsCount={items?.Length ?? 0}");
+
+        int count = Mathf.Max(slots != null ? slots.Length : 0, items != null ? items.Length : 0);
+        for (int i = 0; i < count; i++)
+        {
+            ItemStack data = items != null && i < items.Length ? items[i] : null;
+            ItemStack ui = slots != null && i < slots.Length && slots[i] != null ? slots[i].Stack : null;
+
+            Debug.Log(
+                $"[InventoryTrace] Index={i} " +
+                $"Data={(data != null ? $"{data.Item?.name} x{data.Count}" : "NULL")} " +
+                $"UI={(ui != null ? $"{ui.Item?.name} x{ui.Count}" : "NULL")}"
+            );
+        }
+    }
+
+    private void LogItemsState()
+    {
+        Debug.Log($"[InventoryTrace] ItemsState ManagerID={GetInstanceID()} Count={items?.Length ?? 0}");
+
+        if (items == null) return;
+
+        for (int i = 0; i < items.Length; i++)
+        {
+            ItemStack stack = items[i];
+            Debug.Log($"[InventoryTrace] ItemsState Index={i} Data={(stack != null ? $"{stack.Item?.name} x{stack.Count}" : "NULL")}");
+        }
+    }
+
     /// <summary>
     /// 预检查背包能否容纳指定数量的物品。
     /// 只检查，不修改 items、InventorySlot，也不会触发 InventoryChanged。
@@ -290,6 +335,14 @@ public class InventoryManager : MonoBehaviour
 
         if (items == null || items.Length != length)
         {
+            Debug.LogWarning(
+                $"[InventoryTrace] REBUILD ITEMS! " +
+                $"Manager={name} ID={GetInstanceID()} " +
+                $"OldLength={(items == null ? -1 : items.Length)} " +
+                $"NewLength={length} " +
+                $"Frame={Time.frameCount}"
+            );
+
             // items 是唯一真实背包数据源；InventorySlot 只负责显示/同步，不能反向提供数据。
             items = new ItemStack[length];
         }
@@ -308,6 +361,14 @@ public class InventoryManager : MonoBehaviour
         }
         else
         {
+            Debug.Log(
+                $"[InventoryTrace] RefreshSlot " +
+                $"ManagerID={GetInstanceID()} " +
+                $"Index={index} " +
+                $"Item={stack.Item.itemName} " +
+                $"Frame={Time.frameCount}"
+            );
+
             slots[index].SetStack(stack);
         }
     }
