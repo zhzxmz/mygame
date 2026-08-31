@@ -41,15 +41,42 @@ public class EquipmentController : MonoBehaviour
     {
         Debug.Log($"[EquipmentDebug] TryEquipFromInventory: {item?.name}");
 
-        if (item == null) return false;
-        if (item.itemType != ItemType.Equipment) return false;
-        if (item.equipmentSlot != EquipmentSlot.Weapon) return false;
-        if (inventory == null || equipmentManager == null) return false;
+        if (item == null)
+        {
+            Debug.Log("[EquipmentDebug] TryEquip failed: item is null");
+            return false;
+        }
+
+        if (item.itemType != ItemType.Equipment)
+        {
+            Debug.Log($"[EquipmentDebug] TryEquip failed: itemType={item.itemType} != Equipment");
+            return false;
+        }
+
+        if (item.equipmentSlot != EquipmentSlot.Weapon)
+        {
+            Debug.Log($"[EquipmentDebug] TryEquip failed: equipmentSlot={item.equipmentSlot} != Weapon");
+            return false;
+        }
+
+        if (inventory == null || equipmentManager == null)
+        {
+            Debug.Log($"[EquipmentDebug] TryEquip failed: inventory={inventory != null}, equipmentManager={equipmentManager != null}");
+            return false;
+        }
 
         // 防止重复装备当前武器
-        if (equipmentManager.GetEquippedWeapon() == item) return false;
+        if (equipmentManager.GetEquippedWeapon() == item)
+        {
+            Debug.Log("[EquipmentDebug] TryEquip failed: already equipped this weapon");
+            return false;
+        }
 
-        if (!inventory.HasItem(item, 1)) return false;
+        if (!inventory.HasItem(item, 1))
+        {
+            Debug.Log($"[EquipmentDebug] TryEquip failed: inventory does not have {item.name}");
+            return false;
+        }
 
         CharacterState stats = GetComponent<CharacterState>();
         float attackBefore = stats != null ? stats.attack : float.NaN;
