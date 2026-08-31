@@ -27,6 +27,12 @@ public class InventoryManager : MonoBehaviour
 
         EnsureItems();
 
+        if (slots == null || slots.Length == 0)
+        {
+            Debug.LogWarning("InventoryManager: slots 未赋值或为空，无法添加物品");
+            return 0;
+        }
+
         int remaining = count;
 
         if (item.stackable)
