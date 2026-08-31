@@ -16,3 +16,6 @@ MonoBehaviour:
   icon: {fileID: 0}
   stackable: 1
   maxStack: 99
+  attackBonus: 100
+  defenseBonus: 0
+  maxHPBonus: 0

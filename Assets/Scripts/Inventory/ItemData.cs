@@ -1,10 +1,32 @@
 using UnityEngine;
 
+public enum ItemType
+{
+    Material,
+    Equipment,
+    Consumable
+}
+
+public enum EquipmentSlot
+{
+    None,
+    Weapon,
+    Helmet,
+    Armor,
+    Accessory
+}
+
 [CreateAssetMenu(menuName = "Item/ItemData")]
 public class ItemData : ScriptableObject
 {
     public string itemName;
     public Sprite icon;
+
+    [Header("物品类型")]
+    public ItemType itemType;
+
+    [Header("装备槽位")]
+    public EquipmentSlot equipmentSlot;
 
     [Tooltip("该物品是否可以堆叠")]
     public bool stackable = true;

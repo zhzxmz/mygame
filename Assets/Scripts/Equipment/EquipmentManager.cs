@@ -27,7 +27,11 @@ public class EquipmentManager : MonoBehaviour
     {
         // 如果 Inspector 中已经指定了 equippedWeapon，则在启动时应用它的攻击加成。
         // 注意：不会自动装备 testWeapon。
-        if (equippedWeapon != null && stats != null && appliedAttackBonus == 0f)
+        if (equippedWeapon != null &&
+            stats != null &&
+            appliedAttackBonus == 0f &&
+            equippedWeapon.itemType == ItemType.Equipment &&
+            equippedWeapon.equipmentSlot == EquipmentSlot.Weapon)
         {
             appliedAttackBonus = equippedWeapon.attackBonus;
             stats.attack += appliedAttackBonus;
@@ -37,6 +41,18 @@ public class EquipmentManager : MonoBehaviour
     public bool Equip(ItemData item)
     {
         if (item == null) return false;
+
+        if (item.itemType != ItemType.Equipment)
+        {
+            Debug.LogWarning($"EquipmentManager: {item.name} 不是装备，无法装备");
+            return false;
+        }
+
+        if (item.equipmentSlot != EquipmentSlot.Weapon)
+        {
+            Debug.LogWarning($"EquipmentManager: {item.name} 不是武器，当前只支持 Weapon 槽位");
+            return false;
+        }
 
         if (stats == null)
         {
