@@ -40,6 +40,8 @@ public class EquipmentManager : MonoBehaviour
 
     public bool Equip(ItemData item)
     {
+        Debug.Log($"[EquipmentDebug] EquipmentManager.Equip: item={item?.name}, currentATK={stats?.attack}");
+
         if (item == null) return false;
 
         if (item.itemType != ItemType.Equipment)
@@ -70,6 +72,7 @@ public class EquipmentManager : MonoBehaviour
         appliedAttackBonus = item.attackBonus;
         stats.attack += item.attackBonus;
 
+        Debug.Log($"[EquipmentDebug] EquipmentManager.Equip success: weapon={item.name}, attackBonus={item.attackBonus}, afterATK={stats.attack}");
         return true;
     }
 

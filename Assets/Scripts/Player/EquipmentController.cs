@@ -39,6 +39,8 @@ public class EquipmentController : MonoBehaviour
 
     public bool TryEquipFromInventory(ItemData item)
     {
+        Debug.Log($"[EquipmentDebug] TryEquipFromInventory: {item?.name}");
+
         if (item == null) return false;
         if (item.itemType != ItemType.Equipment) return false;
         if (item.equipmentSlot != EquipmentSlot.Weapon) return false;
@@ -49,16 +51,23 @@ public class EquipmentController : MonoBehaviour
 
         if (!inventory.HasItem(item, 1)) return false;
 
+        CharacterState stats = GetComponent<CharacterState>();
+        float attackBefore = stats != null ? stats.attack : float.NaN;
+
         // 1. 从背包移除新武器
-        if (inventory.RemoveItem(item, 1) != 1) return false;
+        int removeResult = inventory.RemoveItem(item, 1);
+        Debug.Log($"[EquipmentDebug] RemoveItem result: {removeResult}");
+        if (removeResult != 1) return false;
 
         // 2. 获取旧武器
         ItemData oldWeapon = equipmentManager.GetEquippedWeapon();
+        Debug.Log($"[EquipmentDebug] OldWeapon: {oldWeapon?.name ?? "NULL"}");
 
         // 3. 先把旧武器放回背包，再卸下旧武器，避免武器丢失
         if (oldWeapon != null)
         {
             int addedOld = inventory.AddItem(oldWeapon, 1);
+            Debug.Log($"[EquipmentDebug] AddItem oldWeapon result: {addedOld}");
             if (addedOld != 1)
             {
                 // 背包放不下旧武器：回滚新武器
@@ -70,7 +79,10 @@ public class EquipmentController : MonoBehaviour
         }
 
         // 4. 装备新武器
-        if (!equipmentManager.Equip(item))
+        bool equipResult = equipmentManager.Equip(item);
+        Debug.Log($"[EquipmentDebug] Equip result: {equipResult}");
+
+        if (!equipResult)
         {
             // 回滚：新武器放回背包
             inventory.AddItem(item, 1);
@@ -86,6 +98,9 @@ public class EquipmentController : MonoBehaviour
 
             return false;
         }
+
+        float attackAfter = stats != null ? stats.attack : float.NaN;
+        Debug.Log($"[EquipmentDebug] Attack before: {attackBefore}, Attack after: {attackAfter}");
 
         return true;
     }

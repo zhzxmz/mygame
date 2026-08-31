@@ -83,12 +83,15 @@ public class InventoryEquipUI : MonoBehaviour
     {
         if (slot == null) return;
 
+        Debug.Log($"[EquipmentDebug] Selected: {slot.Stack?.Item?.itemName}");
         InventorySelection.Select(slot.Stack);
     }
 
     private void OnEquipClicked()
     {
         ItemStack selected = InventorySelection.SelectedStack;
+        Debug.Log($"[EquipmentDebug] Equip button clicked, selected={(selected != null && selected.Item != null ? selected.Item.itemName : "NULL")}");
+
         if (selected == null || selected.Item == null) return;
 
         if (equipmentController == null)
@@ -98,6 +101,7 @@ public class InventoryEquipUI : MonoBehaviour
         }
 
         bool result = equipmentController.TryEquipFromInventory(selected.Item);
+        Debug.Log($"[EquipmentDebug] TryEquipFromInventory result: {result}");
         if (result)
         {
             InventorySelection.Clear();

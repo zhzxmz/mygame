@@ -72,6 +72,7 @@ public class InventorySlot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
     {
         if (IsEmpty()) return;
 
+        Debug.Log($"[EquipmentDebug] Slot clicked: {stack.Item.itemName}");
         OnSlotClicked?.Invoke(this);
     }
 

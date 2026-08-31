@@ -141,6 +141,7 @@ public class InventoryManager : MonoBehaviour
             InventoryChanged?.Invoke();
         }
 
+        Debug.Log($"[EquipmentDebug] InventoryManager.RemoveItem: item={item?.name}, count={count}, removed={removed}");
         return removed;
     }
 
