@@ -44,6 +44,24 @@ public class WorldItemPickup : MonoBehaviour
             return;
         }
 
+        if (inventory == null)
+        {
+            inventory = FindObjectOfType<InventoryManager>();
+
+            if (inventory == null)
+            {
+                if (!warnedNoInventory)
+                {
+                    Debug.LogWarning("WorldItemPickup: 没有找到 InventoryManager，无法拾取物品");
+                    warnedNoInventory = true;
+                }
+
+                return;
+            }
+
+            warnedNoInventory = false;
+        }
+
         if (!Input.GetKeyDown(pickupKey)) return;
 
         float distance = Vector3.Distance(transform.position, player.position);
