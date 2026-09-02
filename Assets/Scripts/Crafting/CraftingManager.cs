@@ -17,7 +17,8 @@ public class CraftingManager : MonoBehaviour
     {
         if (inventory == null)
         {
-            inventory = FindObjectOfType<InventoryManager>();
+            InventoryManager[] managers = FindObjectsOfType<InventoryManager>(true);
+            inventory = managers.Length > 0 ? managers[0] : null;
 
             if (inventory == null)
             {
