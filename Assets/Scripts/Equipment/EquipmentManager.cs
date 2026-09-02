@@ -138,8 +138,8 @@ public class EquipmentManager : MonoBehaviour
             float newMax = health.maxHP - item.maxHPBonus;
             health.Pool.SetMax(newMax);
 
-            float newCurrent = health.currentHP - item.maxHPBonus;
-            newCurrent = Mathf.Clamp(newCurrent, 0f, newMax);
+            // 卸下装备时只把当前 HP 限制到新上限，不额外扣除，避免玩家直接死亡。
+            float newCurrent = Mathf.Min(health.currentHP, newMax);
             health.Pool.SetCurrent(newCurrent);
         }
     }
