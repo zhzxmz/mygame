@@ -21,7 +21,7 @@ public class WorldItemPickup : MonoBehaviour
 
         if (inventory == null)
         {
-            inventory = FindObjectOfType<InventoryManager>();
+            inventory = FindInventoryManager();
         }
 
         MovementController controller = FindObjectOfType<MovementController>();
@@ -46,7 +46,7 @@ public class WorldItemPickup : MonoBehaviour
 
         if (inventory == null)
         {
-            inventory = FindObjectOfType<InventoryManager>();
+            inventory = FindInventoryManager();
 
             if (inventory == null)
             {
@@ -69,6 +69,12 @@ public class WorldItemPickup : MonoBehaviour
         {
             TryPickup();
         }
+    }
+
+    private InventoryManager FindInventoryManager()
+    {
+        InventoryManager[] managers = FindObjectsOfType<InventoryManager>(true);
+        return managers.Length > 0 ? managers[0] : null;
     }
 
     private void TryPickup()

@@ -12,13 +12,10 @@ public class InventoryManager : MonoBehaviour
 
     void Awake()
     {
-        if (slots == null || slots.Length == 0)
+        EnsureSlots();
+        if (slots != null && slots.Length > 0)
         {
-            slots = FindObjectsOfType<InventorySlot>();
-            if (slots != null && slots.Length > 0)
-            {
-                Debug.Log($"InventoryManager: 自动找到 {slots.Length} 个背包槽");
-            }
+            Debug.Log($"InventoryManager: 自动找到 {slots.Length} 个背包槽");
         }
 
         Debug.Log($"[InventoryTrace] Awake Manager={name} InstanceID={GetInstanceID()} slots={(slots != null ? slots.Length : 0)}");
@@ -331,6 +328,8 @@ public class InventoryManager : MonoBehaviour
 
     private void EnsureItems()
     {
+        EnsureSlots();
+
         int length = slots != null ? slots.Length : 0;
 
         if (items == null || items.Length != length)
@@ -345,6 +344,14 @@ public class InventoryManager : MonoBehaviour
 
             // items 是唯一真实背包数据源；InventorySlot 只负责显示/同步，不能反向提供数据。
             items = new ItemStack[length];
+        }
+    }
+
+    private void EnsureSlots()
+    {
+        if (slots == null || slots.Length == 0)
+        {
+            slots = FindObjectsOfType<InventorySlot>(true);
         }
     }
 

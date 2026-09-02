@@ -26,7 +26,8 @@ public class InventoryEquipUI : MonoBehaviour
 
         if (inventoryManager == null)
         {
-            inventoryManager = FindObjectOfType<InventoryManager>();
+            InventoryManager[] managers = FindObjectsOfType<InventoryManager>(true);
+            inventoryManager = managers.Length > 0 ? managers[0] : null;
         }
 
         if (equipmentController != null && inventoryManager != null && equipmentController.inventory != inventoryManager)
