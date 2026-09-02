@@ -1,47 +1,36 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 装备管理器（第一阶段只支持武器装备）。
-/// 负责把武器 attackBonus 应用到 CharacterState.attack，并在换装/卸下时正确移除。
+/// 通用多槽位装备管理器。
+/// 使用 Dictionary 存储已装备物品，统一处理攻击/防御/最大生命加成。
 /// </summary>
 public class EquipmentManager : MonoBehaviour
 {
-    public ItemData equippedWeapon;
-
     [SerializeField] private ItemData testWeapon;
 
+    private readonly Dictionary<EquipmentSlot, ItemData> equippedItems = new Dictionary<EquipmentSlot, ItemData>();
     private CharacterState stats;
-    private float appliedAttackBonus;
+    private Health health;
 
     void Awake()
     {
         stats = GetComponent<CharacterState>();
+        health = GetComponent<Health>();
 
         if (stats == null)
         {
             Debug.LogWarning("EquipmentManager: 玩家缺少 CharacterState 组件，无法应用装备属性");
         }
-    }
 
-    void Start()
-    {
-        // 如果 Inspector 中已经指定了 equippedWeapon，则在启动时应用它的攻击加成。
-        // 注意：不会自动装备 testWeapon。
-        if (equippedWeapon != null &&
-            stats != null &&
-            appliedAttackBonus == 0f &&
-            equippedWeapon.itemType == ItemType.Equipment &&
-            equippedWeapon.equipmentSlot == EquipmentSlot.Weapon)
+        if (health == null)
         {
-            appliedAttackBonus = equippedWeapon.attackBonus;
-            stats.attack += appliedAttackBonus;
+            Debug.LogWarning("EquipmentManager: 玩家缺少 Health 组件，无法应用生命加成");
         }
     }
 
     public bool Equip(ItemData item)
     {
-        Debug.Log($"[EquipmentDebug] EquipmentManager.Equip: item={item?.name}, currentATK={stats?.attack}");
-
         if (item == null) return false;
 
         if (item.itemType != ItemType.Equipment)
@@ -50,55 +39,107 @@ public class EquipmentManager : MonoBehaviour
             return false;
         }
 
-        if (item.equipmentSlot != EquipmentSlot.Weapon)
+        if (item.equipmentSlot == EquipmentSlot.None)
         {
-            Debug.LogWarning($"EquipmentManager: {item.name} 不是武器，当前只支持 Weapon 槽位");
+            Debug.LogWarning($"EquipmentManager: {item.name} 没有指定装备槽位");
             return false;
         }
 
-        if (stats == null)
+        // 如果该槽已有旧装备，先移除旧装备属性
+        EquipmentSlot slot = item.equipmentSlot;
+        if (equippedItems.TryGetValue(slot, out ItemData oldItem))
         {
-            Debug.LogWarning("EquipmentManager: 缺少 CharacterState 组件，无法装备");
-            return false;
+            RemoveEquipmentStats(oldItem);
         }
 
-        // 先移除旧武器提供的攻击加成
-        if (equippedWeapon != null)
-        {
-            stats.attack -= appliedAttackBonus;
-        }
+        equippedItems[slot] = item;
+        ApplyEquipmentStats(item);
 
-        equippedWeapon = item;
-        appliedAttackBonus = item.attackBonus;
-        stats.attack += item.attackBonus;
-
-        Debug.Log($"[EquipmentDebug] EquipmentManager.Equip success: weapon={item.name}, attackBonus={item.attackBonus}, afterATK={stats.attack}");
         return true;
+    }
+
+    public bool Unequip(EquipmentSlot slot)
+    {
+        if (!equippedItems.TryGetValue(slot, out ItemData item)) return false;
+
+        RemoveEquipmentStats(item);
+        equippedItems.Remove(slot);
+        return true;
+    }
+
+    public ItemData GetEquippedItem(EquipmentSlot slot)
+    {
+        equippedItems.TryGetValue(slot, out ItemData item);
+        return item;
+    }
+
+    public bool IsEquipped(ItemData item)
+    {
+        if (item == null) return false;
+
+        foreach (ItemData equipped in equippedItems.Values)
+        {
+            if (equipped == item) return true;
+        }
+
+        return false;
+    }
+
+    // ---- 兼容包装 ----
+
+    public ItemData GetEquippedWeapon()
+    {
+        return GetEquippedItem(EquipmentSlot.Weapon);
     }
 
     public void UnequipWeapon()
     {
-        if (equippedWeapon == null) return;
-
-        if (stats == null)
-        {
-            Debug.LogWarning("EquipmentManager: 缺少 CharacterState 组件，无法卸下装备");
-        }
-        else
-        {
-            stats.attack -= appliedAttackBonus;
-        }
-
-        appliedAttackBonus = 0f;
-        equippedWeapon = null;
+        Unequip(EquipmentSlot.Weapon);
     }
 
-    public ItemData GetEquippedWeapon()
+    // ---- 属性应用 ----
+
+    private void ApplyEquipmentStats(ItemData item)
     {
-        return equippedWeapon;
+        if (item == null) return;
+
+        if (stats != null)
+        {
+            stats.attack += item.attackBonus;
+            stats.defense += item.defenseBonus;
+        }
+
+        if (health != null && health.Pool != null)
+        {
+            float newMax = health.maxHP + item.maxHPBonus;
+            health.Pool.SetMax(newMax);
+            health.Pool.SetCurrent(health.currentHP + item.maxHPBonus);
+        }
     }
 
-    /// <summary>测试辅助：装备 Inspector 中指定的 testWeapon。</summary>
+    private void RemoveEquipmentStats(ItemData item)
+    {
+        if (item == null) return;
+
+        if (stats != null)
+        {
+            stats.attack -= item.attackBonus;
+            stats.defense -= item.defenseBonus;
+        }
+
+        if (health != null && health.Pool != null)
+        {
+            float newMax = health.maxHP - item.maxHPBonus;
+            health.Pool.SetMax(newMax);
+
+            float newCurrent = health.currentHP - item.maxHPBonus;
+            newCurrent = Mathf.Clamp(newCurrent, 0f, newMax);
+            health.Pool.SetCurrent(newCurrent);
+        }
+    }
+
+    // ---- 测试辅助 ----
+
     public void TestEquip()
     {
         if (testWeapon == null)
@@ -107,25 +148,12 @@ public class EquipmentManager : MonoBehaviour
             return;
         }
 
-        if (stats == null)
-        {
-            Debug.LogWarning("EquipmentManager: 缺少 CharacterState 组件，无法测试装备");
-            return;
-        }
-
-        float beforeAttack = stats.attack;
-        float beforeBonus = appliedAttackBonus;
-
         bool result = Equip(testWeapon);
-
         Debug.Log(
             $"EquipmentManager TestEquip: result={result}, " +
             $"weapon={testWeapon.itemName}, " +
-            $"attackBonus={testWeapon.attackBonus}, " +
-            $"beforeAttack={beforeAttack}, " +
-            $"beforeAppliedBonus={beforeBonus}, " +
-            $"afterAttack={stats.attack}, " +
-            $"appliedAttackBonus={appliedAttackBonus}"
+            $"slot={testWeapon.equipmentSlot}, " +
+            $"equipped={(GetEquippedItem(testWeapon.equipmentSlot) != null ? GetEquippedItem(testWeapon.equipmentSlot).name : "NULL")}"
         );
     }
 }
