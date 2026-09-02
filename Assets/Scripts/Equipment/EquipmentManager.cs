@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -12,6 +13,8 @@ public class EquipmentManager : MonoBehaviour
     private readonly Dictionary<EquipmentSlot, ItemData> equippedItems = new Dictionary<EquipmentSlot, ItemData>();
     private CharacterState stats;
     private Health health;
+
+    public event Action<EquipmentSlot, ItemData> OnEquipmentChanged;
 
     void Awake()
     {
@@ -55,6 +58,7 @@ public class EquipmentManager : MonoBehaviour
         equippedItems[slot] = item;
         ApplyEquipmentStats(item);
 
+        OnEquipmentChanged?.Invoke(slot, item);
         return true;
     }
 
@@ -64,6 +68,8 @@ public class EquipmentManager : MonoBehaviour
 
         RemoveEquipmentStats(item);
         equippedItems.Remove(slot);
+
+        OnEquipmentChanged?.Invoke(slot, null);
         return true;
     }
 

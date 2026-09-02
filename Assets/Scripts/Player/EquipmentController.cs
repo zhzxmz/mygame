@@ -132,19 +132,24 @@ public class EquipmentController : MonoBehaviour
         return true;
     }
 
-    public bool TryUnequipWeapon()
+    public bool TryUnequip(EquipmentSlot slot)
     {
         if (inventory == null || equipmentManager == null) return false;
 
-        ItemData oldWeapon = equipmentManager.GetEquippedWeapon();
-        if (oldWeapon == null) return false;
+        ItemData oldItem = equipmentManager.GetEquippedItem(slot);
+        if (oldItem == null) return false;
 
-        // 必须先成功放回背包，再卸下，避免武器丢失
-        int added = inventory.AddItem(oldWeapon, 1);
+        // 必须先成功放回背包，再卸下，避免装备丢失
+        int added = inventory.AddItem(oldItem, 1);
         if (added != 1) return false;
 
-        equipmentManager.UnequipWeapon();
+        equipmentManager.Unequip(slot);
         return true;
+    }
+
+    public bool TryUnequipWeapon()
+    {
+        return TryUnequip(EquipmentSlot.Weapon);
     }
 
     public void TestEquipFromInventory()
