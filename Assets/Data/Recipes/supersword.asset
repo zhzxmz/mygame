@@ -12,6 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0f1f80a587d0f6a448eac944392e5c7a, type: 3}
   m_Name: supersword
   m_EditorClassIdentifier: 
-  result: {fileID: 0}
+  result: {fileID: 11400000, guid: 7abf438657dfb4140b29f315546b1a8c, type: 2}
   resultCount: 1
-  materials: []
+  materials:
+  - item: {fileID: 11400000, guid: 4d990db225c0a664dbe4ccdbb61f1a4b, type: 2}
+    count: 1
+  - item: {fileID: 11400000, guid: e1cda1f6ddd51bb4c9a1ee8508445cfa, type: 2}
+    count: 1

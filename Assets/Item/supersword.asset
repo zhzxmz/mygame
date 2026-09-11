@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8d6245c5c74f0ff45a0fe82b24ebc59c, type: 3}
   m_Name: supersword
   m_EditorClassIdentifier: 
-  itemName: 
+  itemName: "\u8D85\u7EA7\u5251"
   icon: {fileID: 0}
   itemType: 1
   equipmentSlot: 1

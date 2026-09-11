@@ -72,44 +72,6 @@ public class EnemyDrop : MonoBehaviour
 
     public void Drop()
     {
-        if (worldItemPrefab == null)
-        {
-            Debug.LogWarning("EnemyDrop: worldItemPrefab 没赋值！");
-            return;
-        }
-
-        if (drops == null || drops.Length == 0)
-        {
-            Debug.LogWarning("EnemyDrop: drops 为空");
-            return;
-        }
-
-        foreach (EnemyDropEntry drop in drops)
-        {
-            if (drop == null || drop.item == null)
-            {
-                Debug.LogWarning("EnemyDrop: 掉落项无效，跳过");
-                continue;
-            }
-
-            Vector3 dropPosition = transform.position;
-
-            // 向下检测地面，避免掉落物生成在地面以下。
-            if (Physics.Raycast(dropPosition, Vector3.down, out RaycastHit hit, 50f))
-            {
-                dropPosition.y = hit.point.y + 0.1f;
-            }
-
-            GameObject obj = Instantiate(worldItemPrefab, dropPosition, Quaternion.identity);
-
-            WorldItem worldItem = obj.GetComponent<WorldItem>();
-            if (worldItem == null)
-            {
-                Debug.LogWarning("EnemyDrop: Prefab 上没有 WorldItem 组件！");
-                continue;
-            }
-
-            worldItem.SetStack(new ItemStack(drop.item, drop.count));
-        }
+        DropSpawner.SpawnDrops(worldItemPrefab, drops, transform);
     }
 }
