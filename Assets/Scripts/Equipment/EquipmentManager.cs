@@ -23,6 +23,13 @@ public class EquipmentManager : MonoBehaviour
         health = GetComponent<Health>();
         buffManager = GetComponent<BuffManager>();
 
+        Debug.Log(
+            $"[BuffDebug] EquipmentManager.Awake: " +
+            $"stats={(stats != null)}, " +
+            $"health={(health != null)}, " +
+            $"buffManager={(buffManager != null)}"
+        );
+
         if (stats == null)
         {
             Debug.LogWarning("EquipmentManager: 玩家缺少 CharacterState 组件，无法应用装备属性");
@@ -36,6 +43,14 @@ public class EquipmentManager : MonoBehaviour
 
     public bool Equip(ItemData item)
     {
+        Debug.Log(
+            $"[BuffDebug] EquipmentManager.Equip begin: " +
+            $"item={(item != null ? item.name : "NULL")}, " +
+            $"itemName={(item != null ? item.itemName : "NULL")}, " +
+            $"attackBonus={(item != null ? item.attackBonus : 0)}, " +
+            $"hasBuff={(item != null && item.equippedBuff != null)}"
+        );
+
         if (item == null) return false;
 
         if (item.itemType != ItemType.Equipment)
@@ -67,7 +82,18 @@ public class EquipmentManager : MonoBehaviour
 
         if (item.equippedBuff != null && buffManager != null)
         {
+            Debug.Log(
+                $"[BuffDebug] EquipmentManager before AddBuff: " +
+                $"buffName={item.equippedBuff.buffName}, " +
+                $"buffAttackBonus={item.equippedBuff.attackBonus}"
+            );
+
             buffManager.AddBuff(item.equippedBuff);
+
+            Debug.Log(
+                $"[BuffDebug] EquipmentManager after AddBuff: " +
+                $"hasBuff={buffManager.HasBuff(item.equippedBuff)}"
+            );
         }
 
         OnEquipmentChanged?.Invoke(slot, item);

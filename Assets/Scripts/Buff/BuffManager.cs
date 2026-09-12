@@ -29,11 +29,20 @@ public class BuffManager : MonoBehaviour
 
     public void AddBuff(BuffData buff)
     {
+        Debug.Log(
+            $"[BuffDebug] BuffManager.AddBuff: " +
+            $"buffNull={(buff == null)}, " +
+            $"buffName={(buff != null ? buff.buffName : "NULL")}, " +
+            $"attackBonus={(buff != null ? buff.attackBonus : 0)}, " +
+            $"activeBuffsBefore={activeBuffs.Count}"
+        );
+
         if (buff == null) return;
         if (activeBuffs.Contains(buff)) return;
 
         activeBuffs.Add(buff);
         Debug.Log($"[BuffManager] Add Buff: {buff.buffName}");
+        Debug.Log($"[BuffDebug] BuffManager.AddBuff: activeBuffsAfter={activeBuffs.Count}");
         RecalculateBuffs();
     }
 
@@ -61,11 +70,27 @@ public class BuffManager : MonoBehaviour
             targetMaxHP += buff.maxHPBonus;
         }
 
+        float attackBefore = stats != null ? stats.attack : float.NaN;
+
+        Debug.Log(
+            $"[BuffDebug] BuffManager.RecalculateBuffs: " +
+            $"activeBuffs={activeBuffs.Count}, " +
+            $"targetAttack={targetAttack}, " +
+            $"appliedAttackBonus={appliedAttackBonus}, " +
+            $"statsNull={(stats == null)}, " +
+            $"attackBefore={attackBefore}"
+        );
+
         if (stats != null)
         {
             stats.attack += targetAttack - appliedAttackBonus;
             stats.defense += targetDefense - appliedDefenseBonus;
         }
+
+        Debug.Log(
+            $"[BuffDebug] BuffManager.RecalculateBuffs: " +
+            $"attackAfter={(stats != null ? stats.attack : float.NaN)}"
+        );
 
         if (health != null && health.Pool != null)
         {
