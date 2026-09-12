@@ -13,6 +13,7 @@ public class EquipmentManager : MonoBehaviour
     private readonly Dictionary<EquipmentSlot, ItemData> equippedItems = new Dictionary<EquipmentSlot, ItemData>();
     private CharacterState stats;
     private Health health;
+    private BuffManager buffManager;
 
     public event Action<EquipmentSlot, ItemData> OnEquipmentChanged;
 
@@ -20,6 +21,7 @@ public class EquipmentManager : MonoBehaviour
     {
         stats = GetComponent<CharacterState>();
         health = GetComponent<Health>();
+        buffManager = GetComponent<BuffManager>();
 
         if (stats == null)
         {
@@ -48,15 +50,25 @@ public class EquipmentManager : MonoBehaviour
             return false;
         }
 
-        // 如果该槽已有旧装备，先移除旧装备属性
+        // 如果该槽已有旧装备，先移除旧装备属性和旧装备 Buff
         EquipmentSlot slot = item.equipmentSlot;
         if (equippedItems.TryGetValue(slot, out ItemData oldItem))
         {
             RemoveEquipmentStats(oldItem);
+
+            if (oldItem.equippedBuff != null && buffManager != null)
+            {
+                buffManager.RemoveBuff(oldItem.equippedBuff);
+            }
         }
 
         equippedItems[slot] = item;
         ApplyEquipmentStats(item);
+
+        if (item.equippedBuff != null && buffManager != null)
+        {
+            buffManager.AddBuff(item.equippedBuff);
+        }
 
         OnEquipmentChanged?.Invoke(slot, item);
         return true;
@@ -67,6 +79,12 @@ public class EquipmentManager : MonoBehaviour
         if (!equippedItems.TryGetValue(slot, out ItemData item)) return false;
 
         RemoveEquipmentStats(item);
+
+        if (item.equippedBuff != null && buffManager != null)
+        {
+            buffManager.RemoveBuff(item.equippedBuff);
+        }
+
         equippedItems.Remove(slot);
 
         OnEquipmentChanged?.Invoke(slot, null);

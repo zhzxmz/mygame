@@ -43,4 +43,8 @@ public class ItemData : ScriptableObject
 
     [Tooltip("装备后提供的最大生命加成（暂未使用）")]
     public int maxHPBonus;
+
+    [Header("装备 Buff")]
+    [Tooltip("装备后自动获得的 Buff；卸下时移除")]
+    public BuffData equippedBuff;
 }
