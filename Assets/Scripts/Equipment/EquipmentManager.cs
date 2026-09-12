@@ -24,7 +24,7 @@ public class EquipmentManager : MonoBehaviour
         buffManager = GetComponent<BuffManager>();
 
         Debug.Log(
-            $"[BuffDebug] EquipmentManager.Awake: " +
+            $"[BuffDebug] EquipmentManager Awake: " +
             $"stats={(stats != null)}, " +
             $"health={(health != null)}, " +
             $"buffManager={(buffManager != null)}"
@@ -80,14 +80,14 @@ public class EquipmentManager : MonoBehaviour
         equippedItems[slot] = item;
         ApplyEquipmentStats(item);
 
+        Debug.Log(
+            $"[BuffDebug] Before AddBuff: " +
+            $"hasBuff={item.equippedBuff != null}, " +
+            $"buffManagerExists={buffManager != null}"
+        );
+
         if (item.equippedBuff != null && buffManager != null)
         {
-            Debug.Log(
-                $"[BuffDebug] EquipmentManager before AddBuff: " +
-                $"buffName={item.equippedBuff.buffName}, " +
-                $"buffAttackBonus={item.equippedBuff.attackBonus}"
-            );
-
             buffManager.AddBuff(item.equippedBuff);
 
             Debug.Log(
