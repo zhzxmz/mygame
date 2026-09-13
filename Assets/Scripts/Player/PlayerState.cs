@@ -1,11 +1,7 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class PlayerState : CharacterState
 {
-    
-    public double PlayerHealth=10;
     public PlayerSoul soul;
 
     private Health health;
@@ -38,18 +34,15 @@ public class PlayerState : CharacterState
         }
     }
 
-    public void TakeDamage(int Damage)
+    private void OnPlayerDeath()
     {
-        PlayerHealth-=Damage;
+        Debug.Log("玩家死亡");
+
+        // 玩家死亡时同步灵魂状态。灵魂状态读取 CharacterState.currentHP，不保留第二套战斗 HP。
         if (soul != null)
         {
             soul.PlayerIsSoul();
         }
-    }
-
-    private void OnPlayerDeath()
-    {
-        Debug.Log("玩家死亡");
 
         MovementController movement = GetComponent<MovementController>();
         if (movement != null)
