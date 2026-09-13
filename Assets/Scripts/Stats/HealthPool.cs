@@ -2,85 +2,90 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// 可扩展的生命池基础类。
-/// 只负责表示一条生命池的当前值与最大值，并提供 Damage / Heal / IsEmpty 等基础能力。
-/// 不依赖 MonoBehaviour，可被角色、敌人、玩家等脚本继承或组合使用。
+/// 生命池视图。
+/// 这个类不再自己保存 current / max，只绑定 CharacterState，并把它包装成旧的 HealthPool 接口。
+/// Health.Pool 返回的就是这个视图，所以旧的 health.Pool.SetMax / SetCurrent 调用仍然可用，
+/// 但所有数据最终都写进 CharacterState.currentHP / maxHP，实际血量只有这一份。
 /// </summary>
-[Serializable]
 public class HealthPool
 {
-    [SerializeField] private float current;
-    [SerializeField] private float max;
+    private CharacterState state;
 
     public event Action<float, float> OnChanged;
 
-    public float Current => current;
-    public float Max => max;
+    public float Current => state != null ? state.currentHP : 0f;
+    public float Max => state != null ? state.maxHP : 0f;
 
-    public bool IsEmpty => current <= 0f;
-    public bool IsFull => current >= max;
+    public bool IsEmpty => Current <= 0f;
+    public bool IsFull => Current >= Max;
 
     /// <summary>当前生命值比例，0 ~ 1。Max <= 0 时返回 0。</summary>
-    public float Ratio => max <= 0f ? 0f : current / max;
+    public float Ratio => Max <= 0f ? 0f : Current / Max;
 
-    public HealthPool() : this(100f)
+    /// <summary>
+    /// 绑定到 CharacterState。绑定后所有读写都会落到 CharacterState。
+    /// </summary>
+    public HealthPool(CharacterState state)
     {
-    }
-
-    public HealthPool(float max) : this(max, max)
-    {
-    }
-
-    public HealthPool(float max, float current)
-    {
-        this.max = Mathf.Max(0f, max);
-        this.current = Mathf.Clamp(current, 0f, this.max);
+        this.state = state;
     }
 
     /// <summary>造成伤害，返回实际扣除的生命值。</summary>
     public virtual float Damage(float amount)
     {
-        if (amount <= 0f || IsEmpty) return 0f;
+        if (state == null || amount <= 0f || IsEmpty) return 0f;
 
-        float before = current;
-        current = Mathf.Max(0f, current - amount);
+        float before = state.currentHP;
+        float after = Mathf.Max(0f, before - amount);
+        state.currentHP = after;
+
         NotifyChanged();
-        return before - current;
+        return before - after;
     }
 
     /// <summary>治疗，返回实际恢复的生命值。</summary>
     public virtual float Heal(float amount)
     {
-        if (amount <= 0f || IsFull) return 0f;
+        if (state == null || amount <= 0f || IsFull) return 0f;
 
-        float before = current;
-        current = Mathf.Min(max, current + amount);
+        float before = state.currentHP;
+        float after = Mathf.Min(Mathf.Max(0f, state.maxHP), before + amount);
+
+        if (after <= before) return 0f;
+
+        state.currentHP = after;
         NotifyChanged();
-        return current - before;
+        return after - before;
     }
 
     public virtual void SetMax(float newMax)
     {
-        max = Mathf.Max(0f, newMax);
-        if (current > max)
-        {
-            current = max;
-        }
+        if (state == null) return;
+
+        float clampedMax = Mathf.Max(0f, newMax);
+        state.maxHP = clampedMax;
+
+        if (state.currentHP > clampedMax) state.currentHP = clampedMax;
+        if (state.currentHP < 0f) state.currentHP = 0f;
+
         NotifyChanged();
     }
 
     public virtual void SetCurrent(float newCurrent)
     {
-        current = Mathf.Clamp(newCurrent, 0f, max);
+        if (state == null) return;
+
+        float clampedMax = Mathf.Max(0f, state.maxHP);
+        state.currentHP = Mathf.Clamp(newCurrent, 0f, clampedMax);
+
         NotifyChanged();
     }
 
     public virtual void Fill()
     {
-        if (current >= max) return;
+        if (state == null || IsFull) return;
 
-        current = max;
-        NotifyChanged();
+        SetCurrent(state.maxHP);
     }
 
     public virtual void Reset()
@@ -88,8 +93,14 @@ public class HealthPool
         Fill();
     }
 
+    /// <summary>供 Health 在直接写入 CharacterState 后触发 OnChanged，保持旧 HealthPool 事件行为。</summary>
+    internal void NotifyExternalChange()
+    {
+        NotifyChanged();
+    }
+
     protected virtual void NotifyChanged()
     {
-        OnChanged?.Invoke(current, max);
+        OnChanged?.Invoke(Current, Max);
     }
 }
