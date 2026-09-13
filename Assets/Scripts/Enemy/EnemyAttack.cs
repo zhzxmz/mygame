@@ -10,13 +10,16 @@ public class EnemyAttack : MonoBehaviour
     [Header("攻击参数")]
     public float attackRange = 1.5f;
     public float attackCooldown = 1f;
-    public int damage = 10;
+    [Tooltip("攻击倍率，最终伤害 = CharacterState.attack * damageMultiplier")]
+    public float damageMultiplier = 1f;
 
     private Transform player;
     private Health enemyHealth;
     private Health playerHealth;
+    private CharacterState stats;
     private float nextAttackTime;
     private bool warnedNoPlayerHealth;
+    private bool warnedNoCharacterState;
 
     void Awake()
     {
@@ -25,6 +28,8 @@ public class EnemyAttack : MonoBehaviour
 
     void Start()
     {
+        stats = GetComponent<CharacterState>();
+
         MovementController controller = FindObjectOfType<MovementController>();
         if (controller != null)
         {
@@ -57,8 +62,26 @@ public class EnemyAttack : MonoBehaviour
 
         if (Time.time < nextAttackTime) return;
 
+        // 敌人没有 CharacterState 时只警告一次，并跳过本次攻击。
+        if (stats == null)
+        {
+            if (!warnedNoCharacterState)
+            {
+                Debug.LogWarning("EnemyAttack: 敌人没有 CharacterState，无法计算攻击力");
+                warnedNoCharacterState = true;
+            }
+
+            return;
+        }
+
+        // 最终伤害基于自身 CharacterState.attack，倍率保留攻击动作差异。
+        int finalDamage = Mathf.Max(
+            0,
+            Mathf.RoundToInt(stats.attack * damageMultiplier)
+        );
+
         // 实际造成伤害
-        playerHealth.TakeDamage(damage);
+        playerHealth.TakeDamage(finalDamage);
 
         nextAttackTime = Time.time + attackCooldown;
     }

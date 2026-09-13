@@ -604,6 +604,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 53031b751b5f8f54ab48ed3e5e8c0a1c, type: 3}
       insertIndex: -1
       addedObject: {fileID: 7447091340051341001}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 53031b751b5f8f54ab48ed3e5e8c0a1c, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6477514858783129391}
   m_SourcePrefab: {fileID: 100100000, guid: 53031b751b5f8f54ab48ed3e5e8c0a1c, type: 3}
 --- !u!1 &3711717526038114609 stripped
 GameObject:
@@ -721,7 +724,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   attackRange: 1.5
   attackCooldown: 1
-  damage: 10
+  damageMultiplier: 1
 --- !u!114 &7447091340051341001
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -736,6 +739,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   hitFlashColor: {r: 1, g: 0.3, b: 0.3, a: 1}
   hitFlashDuration: 0.1
+--- !u!114 &6477514858783129391
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3711717526038114609}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ccfaf33099ec75e4ea43de6c8ffd0b47, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  currentHP: 100
+  maxHP: 100
+  attack: 10
+  defense: 5
 --- !u!4 &4091937802024364939 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 53031b751b5f8f54ab48ed3e5e8c0a1c, type: 3}
