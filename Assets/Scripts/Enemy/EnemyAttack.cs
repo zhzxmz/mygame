@@ -2,24 +2,24 @@ using UnityEngine;
 
 /// <summary>
 /// 敌人攻击逻辑。
-/// 只负责在玩家进入攻击范围且冷却结束时调用玩家 Health.TakeDamage()，
-/// 不处理移动、AI、掉落等。
+/// 只负责在玩家进入攻击范围且冷却结束时，用自身 CharacterState.attack 减去玩家 CharacterState.defense，
+/// 然后通过 DamageInfo 调用玩家 Health.TakeDamage()。不处理移动、AI、掉落等。
 /// </summary>
 public class EnemyAttack : MonoBehaviour
 {
     [Header("攻击参数")]
     public float attackRange = 1.5f;
     public float attackCooldown = 1f;
-    [Tooltip("攻击倍率，最终伤害 = CharacterState.attack * damageMultiplier")]
-    public float damageMultiplier = 1f;
 
     private Transform player;
     private Health enemyHealth;
     private Health playerHealth;
     private CharacterState stats;
+    private CharacterState playerState;
     private float nextAttackTime;
     private bool warnedNoPlayerHealth;
     private bool warnedNoCharacterState;
+    private bool warnedNoPlayerCharacterState;
 
     void Awake()
     {
@@ -35,6 +35,7 @@ public class EnemyAttack : MonoBehaviour
         {
             player = controller.transform;
             playerHealth = player.GetComponent<Health>();
+            playerState = player.GetComponent<CharacterState>();
         }
     }
 
@@ -74,14 +75,23 @@ public class EnemyAttack : MonoBehaviour
             return;
         }
 
-        // 最终伤害基于自身 CharacterState.attack，倍率保留攻击动作差异。
-        int finalDamage = Mathf.Max(
-            0,
-            Mathf.RoundToInt(stats.attack * damageMultiplier)
-        );
+        // 玩家没有 CharacterState 时只警告一次，并跳过本次攻击。
+        if (playerState == null)
+        {
+            if (!warnedNoPlayerCharacterState)
+            {
+                Debug.LogWarning("EnemyAttack: 玩家没有 CharacterState，无法计算防御");
+                warnedNoPlayerCharacterState = true;
+            }
 
-        // 实际造成伤害
-        playerHealth.TakeDamage(finalDamage);
+            return;
+        }
+
+        // 与玩家攻击使用同一套最小防御公式：最低造成 1 点伤害。
+        float finalDamage = Mathf.Max(1f, stats.attack - playerState.defense);
+
+        // 通过现有 DamageInfo 传递最终伤害。
+        playerHealth.TakeDamage(new DamageInfo(finalDamage));
 
         nextAttackTime = Time.time + attackCooldown;
     }
