@@ -96,7 +96,8 @@ public class PlayerInputController : MonoBehaviour
     {
         if (Cursor.lockState == CursorLockMode.Locked)
         {
-            Vector2 mouseAxisDelta = new Vector2(Input.GetAxis("Mouse X"), Input.GetAxis("Mouse Y"));
+            // 使用 GetAxisRaw，避免 GetAxis 的平滑导致鼠标停止后剑还继续漂移。
+            Vector2 mouseAxisDelta = new Vector2(Input.GetAxisRaw("Mouse X"), Input.GetAxisRaw("Mouse Y"));
             return mouseAxisDelta / MouseAxisSensitivity;
         }
 
