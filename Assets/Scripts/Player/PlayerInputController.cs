@@ -73,7 +73,7 @@ public class PlayerInputController : MonoBehaviour
 
             if (mouseDelta.magnitude >= weaponController.MinMouseDelta)
             {
-                weaponController.UpdateTargetDirection(mouseDelta.normalized);
+                weaponController.ApplyMouseRotation(mouseDelta.normalized);
             }
         }
 
