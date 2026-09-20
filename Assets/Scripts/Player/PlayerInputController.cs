@@ -66,14 +66,14 @@ public class PlayerInputController : MonoBehaviour
             weaponController.BeginControl();
         }
 
-        // 左键按住：持续读取鼠标每帧移动方向。
+        // 左键按住：持续读取鼠标每帧移动量。
         if (Input.GetMouseButton(0))
         {
             Vector2 mouseDelta = ReadMouseDelta();
 
-            if (mouseDelta.magnitude >= weaponController.MinMouseDelta)
+            if (mouseDelta.sqrMagnitude > 0f)
             {
-                weaponController.ApplyMouseRotation(mouseDelta.normalized);
+                weaponController.ApplyMouseRotation(mouseDelta);
             }
         }
 

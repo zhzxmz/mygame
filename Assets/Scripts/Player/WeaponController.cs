@@ -5,11 +5,8 @@ public class WeaponController : MonoBehaviour
     public Transform weaponPivot;
 
     [Header("挥剑参数")]
-    [Tooltip("每帧鼠标移动超过该距离才产生旋转（屏幕像素）")]
-    [SerializeField] private float minMouseDelta = 3f;
-
-    [Tooltip("鼠标控制时的最大旋转速度（度/秒）")]
-    [SerializeField, Range(180f, 1440f)] private float rotationSpeed = 720f;
+    [Tooltip("鼠标移动量到剑旋转量的灵敏度。1 表示 1 像素约 1 度")]
+    [SerializeField] private float rotationSensitivity = 1f;
 
     [Tooltip("松开左键后剑返回默认姿态的速度（度/秒）")]
     [SerializeField] private float returnSpeed = 360f;
@@ -23,8 +20,6 @@ public class WeaponController : MonoBehaviour
 
     // 鼠标方向参考系的固定 Transform，优先使用主相机。
     private Transform referenceFrame;
-
-    public float MinMouseDelta => minMouseDelta;
 
     void Awake()
     {
@@ -59,7 +54,7 @@ public class WeaponController : MonoBehaviour
     {
         if (weaponPivot == null || !hasDefaultRotation) return;
 
-        // 控制期间不保存 targetRotation，也不主动追目标方向。
+        // 控制期间不保存目标姿态，也不主动追任何方向。
         // 旋转只由 ApplyMouseRotation 在当前帧发生；鼠标不动就完全不旋转。
         if (isControlling) return;
 
@@ -82,24 +77,19 @@ public class WeaponController : MonoBehaviour
     }
 
     /// <summary>
-    /// 根据本帧鼠标移动方向立即产生旋转。
+    /// 根据本帧鼠标位移量立即产生旋转。
+    /// mouseDelta 为 0 时不旋转；mouseDelta 很小则产生很小的旋转。
     /// 旋转轴来自固定参考系（相机），而不是剑自身旋转后的 local axes。
-    /// 鼠标没有移动时 PlayerInputController 不会调用本方法，所以剑会立即停止。
     /// </summary>
-    public void ApplyMouseRotation(Vector2 direction)
+    public void ApplyMouseRotation(Vector2 mouseDelta)
     {
         if (!isControlling || weaponPivot == null) return;
-        if (direction.sqrMagnitude < 0.0001f) return;
+        if (mouseDelta.sqrMagnitude <= 0f) return;
 
-        direction = direction.normalized;
-
-        float speed = Mathf.Clamp(rotationSpeed, 180f, 1440f);
-        float maxStep = speed * Time.deltaTime;
-
-        // step 定义在固定参考系的局部坐标中：X 对应上下，Y 对应左右。
+        // 鼠标位移量 × rotationSensitivity = 本帧旋转角度。
         Quaternion step = Quaternion.Euler(
-            -direction.y * maxStep,
-            direction.x * maxStep,
+            -mouseDelta.y * rotationSensitivity,
+            mouseDelta.x * rotationSensitivity,
             0f
         );
 
