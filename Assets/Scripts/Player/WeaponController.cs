@@ -4,25 +4,21 @@ public class WeaponController : MonoBehaviour
 {
     public Transform weaponPivot;
 
-    [Header("挥砍参数")]
-    [Tooltip("最小鼠标滑动距离（屏幕像素）")]
-    [SerializeField] private float minSwipeDistance = 20f;
+    [Header("挥剑参数")]
+    [Tooltip("每帧鼠标移动超过该距离才更新剑的目标方向（屏幕像素）")]
+    [SerializeField] private float minMouseDelta = 2f;
 
     [Tooltip("剑的旋转速度（度/秒）")]
     [SerializeField, Range(180f, 1440f)] private float rotationSpeed = 720f;
 
-    [Tooltip("一次挥砍的持续时间（秒）")]
-    [SerializeField] private float attackDuration = 0.25f;
-
     [Tooltip("剑的 Trigger Collider，运行时自动查找同物体上的 Collider")]
     [SerializeField] private Collider weaponCollider;
 
-    private bool isAttacking;
-    private float attackTimer;
+    private bool isControlling;
+    private bool hasTarget;
     private Quaternion targetRotation;
 
-    public float MinSwipeDistance => minSwipeDistance;
-    public bool IsAttacking => isAttacking;
+    public float MinMouseDelta => minMouseDelta;
 
     void Awake()
     {
@@ -31,16 +27,13 @@ public class WeaponController : MonoBehaviour
             weaponCollider = GetComponent<Collider>();
         }
 
-        // 非攻击阶段关闭命中判定，攻击开始时再启用。
+        // 非控制阶段关闭命中判定，左键按住期间开启。
         SetHitboxActive(false);
     }
 
     void Update()
     {
-        if (!isAttacking) return;
-        if (weaponPivot == null) return;
-
-        attackTimer += Time.deltaTime;
+        if (!isControlling || !hasTarget || weaponPivot == null) return;
 
         float speed = Mathf.Clamp(rotationSpeed, 180f, 1440f);
         weaponPivot.localRotation = Quaternion.RotateTowards(
@@ -48,33 +41,41 @@ public class WeaponController : MonoBehaviour
             targetRotation,
             speed * Time.deltaTime
         );
-
-        if (attackTimer >= attackDuration)
-        {
-            isAttacking = false;
-            SetHitboxActive(false);
-        }
     }
 
-    /// <summary>
-    /// 根据鼠标滑动方向开始一次挥砍。
-    /// </summary>
-    public void StartSwipeAttack(Vector2 swipeDirection)
+    /// <summary>左键按下：开始持续控制剑。</summary>
+    public void BeginControl()
     {
-        if (isAttacking) return;
-        if (weaponPivot == null) return;
-        if (swipeDirection.sqrMagnitude < 0.0001f) return;
+        if (isControlling) return;
 
-        Vector2 direction = swipeDirection.normalized;
+        isControlling = true;
+        hasTarget = false;
+        SetHitboxActive(true);
+    }
 
-        // 连续方向映射：不量化成 8 方向，直接用滑动方向的 x/y 分量决定剑的目标俯仰/偏航。
+    /// <summary>持续更新鼠标方向对应的剑目标方向。</summary>
+    public void UpdateTargetDirection(Vector2 direction)
+    {
+        if (!isControlling) return;
+        if (direction.sqrMagnitude < 0.0001f) return;
+
+        direction = direction.normalized;
+
+        // 连续方向映射：不量化成 8 方向，直接用方向矢量的 x/y 分量决定目标俯仰/偏航。
         float targetX = -direction.y * 90f;
         float targetY = direction.x * 90f;
         targetRotation = Quaternion.Euler(targetX, targetY, 0f);
+        hasTarget = true;
+    }
 
-        attackTimer = 0f;
-        isAttacking = true;
-        SetHitboxActive(true);
+    /// <summary>左键松开：停止控制剑。</summary>
+    public void EndControl()
+    {
+        if (!isControlling) return;
+
+        isControlling = false;
+        hasTarget = false;
+        SetHitboxActive(false);
     }
 
     private void SetHitboxActive(bool active)
