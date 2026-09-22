@@ -14,6 +14,11 @@ public class WeaponController : MonoBehaviour
     [Tooltip("剑的 Trigger Collider，运行时自动查找同物体上的 Collider")]
     [SerializeField] private Collider weaponCollider;
 
+    [Tooltip("剑的 Renderer，留空会自动查找自身及子物体的 Renderer")]
+    [SerializeField] private Renderer[] swordRenderers;
+
+    private const float ReturnCompleteAngle = 0.1f;
+
     private bool isControlling;
     private Quaternion defaultLocalRotation;
     private bool hasDefaultRotation;
@@ -26,6 +31,12 @@ public class WeaponController : MonoBehaviour
         if (weaponCollider == null)
         {
             weaponCollider = GetComponent<Collider>();
+        }
+
+        // 自动查找剑自身的 Renderer（包括子物体），用于非攻击状态隐藏。
+        if (swordRenderers == null || swordRenderers.Length == 0)
+        {
+            swordRenderers = GetComponentsInChildren<Renderer>(true);
         }
 
         // 保存默认剑姿态，只用于松开左键后的回位。
@@ -46,7 +57,8 @@ public class WeaponController : MonoBehaviour
             referenceFrame = weaponPivot.parent;
         }
 
-        // 非控制阶段关闭命中判定，左键按住期间开启。
+        // 默认状态：剑隐藏，命中判定关闭。
+        SetSwordVisible(false);
         SetHitboxActive(false);
     }
 
@@ -60,11 +72,21 @@ public class WeaponController : MonoBehaviour
 
         // 松开左键后平滑回到默认姿态。
         float returnSpd = Mathf.Max(0f, returnSpeed);
-        weaponPivot.localRotation = Quaternion.RotateTowards(
-            weaponPivot.localRotation,
-            defaultLocalRotation,
-            returnSpd * Time.deltaTime
-        );
+        if (returnSpd > 0f)
+        {
+            weaponPivot.localRotation = Quaternion.RotateTowards(
+                weaponPivot.localRotation,
+                defaultLocalRotation,
+                returnSpd * Time.deltaTime
+            );
+        }
+
+        // 确认已经接近默认姿态后，吸附并隐藏剑。
+        if (Quaternion.Angle(weaponPivot.localRotation, defaultLocalRotation) < ReturnCompleteAngle)
+        {
+            weaponPivot.localRotation = defaultLocalRotation;
+            SetSwordVisible(false);
+        }
     }
 
     /// <summary>左键按下：开始持续控制剑。</summary>
@@ -73,6 +95,7 @@ public class WeaponController : MonoBehaviour
         if (isControlling) return;
 
         isControlling = true;
+        SetSwordVisible(true);
         SetHitboxActive(true);
     }
 
@@ -122,6 +145,19 @@ public class WeaponController : MonoBehaviour
         if (weaponCollider != null)
         {
             weaponCollider.enabled = active;
+        }
+    }
+
+    private void SetSwordVisible(bool visible)
+    {
+        if (swordRenderers == null) return;
+
+        for (int i = 0; i < swordRenderers.Length; i++)
+        {
+            if (swordRenderers[i] != null)
+            {
+                swordRenderers[i].enabled = visible;
+            }
         }
     }
 }
