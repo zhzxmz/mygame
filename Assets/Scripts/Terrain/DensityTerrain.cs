@@ -17,17 +17,27 @@ public class DensityTerrain : MonoBehaviour
     [Min(1)]
     public int resolution = 24;
 
+    [Header("Density Mode")]
+    public DensityGenerationMode densityMode = DensityGenerationMode.HeightField;
+
     [Header("Density")]
     public bool useNoise = true;
 
-    [Tooltip("基础地表高度（世界 Y）")]
+    [Tooltip("HeightField 基础地表高度（世界 Y）")]
     public float height = 16f;
 
     [Tooltip("噪声频率")]
     public float noiseScale = 0.08f;
 
-    [Tooltip("噪声高度强度")]
+    [Tooltip("噪声强度")]
     public float noiseStrength = 4f;
+
+    [Header("Sphere Cavity Debug")]
+    [Tooltip("球形空洞中心相对地形 Origin 的偏移")]
+    public Vector3 cavityCenterOffset = new Vector3(0f, 6f, 0f);
+
+    [Tooltip("球形空洞半径")]
+    public float cavityRadius = 3f;
 
     [Header("Rendering")]
     public Material terrainMaterial;
@@ -135,37 +145,19 @@ public class DensityTerrain : MonoBehaviour
         );
 
         Vector3 origin = transform.position;
-        DensityField field = new DensityField(cells, cells, cells, origin, size);
 
-        float strength = Mathf.Max(0f, noiseStrength);
-
-        for (int x = 0; x < field.SampleCountX; x++)
-        {
-            for (int y = 0; y < field.SampleCountY; y++)
-            {
-                for (int z = 0; z < field.SampleCountZ; z++)
-                {
-                    Vector3 world = field.GetWorldPosition(x, y, z);
-
-                    float surfaceHeight = height;
-
-                    if (useNoise && strength > 0f)
-                    {
-                        float noise = Mathf.PerlinNoise(
-                            world.x * noiseScale,
-                            world.z * noiseScale
-                        ) * 2f - 1f;
-
-                        surfaceHeight += noise * strength;
-                    }
-
-                    // 地表以下 Density > 0，地表以上 Density < 0。
-                    field[x, y, z] = surfaceHeight - world.y;
-                }
-            }
-        }
-
-        return field;
+        return DensityFieldGenerator.Generate(
+            densityMode,
+            cells,
+            origin,
+            size,
+            useNoise,
+            height,
+            noiseScale,
+            noiseStrength,
+            cavityCenterOffset,
+            cavityRadius
+        );
     }
 
     private Material GetMaterial()
