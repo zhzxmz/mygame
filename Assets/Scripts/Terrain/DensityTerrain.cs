@@ -46,6 +46,16 @@ public class DensityTerrain : MonoBehaviour
     [Tooltip("Grass 层以下 Dirt 层厚度")]
     public float dirtDepth = 3f;
 
+    [Header("Debug Cutaway")]
+    [Tooltip("仅用于调试：在 HeightField 地形中切出一个垂直空气切面")]
+    public bool debugCutaway = false;
+
+    [Tooltip("切面中心的世界 X 坐标")]
+    public float debugCutX = 0f;
+
+    [Tooltip("切面宽度")]
+    public float debugCutWidth = 4f;
+
     [Header("Rendering")]
     public Material grassMaterial;
     public Material dirtMaterial;
@@ -117,10 +127,46 @@ public class DensityTerrain : MonoBehaviour
         }
 
         DensityField densityField = BuildDensityField(out MaterialField materialField);
+        ApplyDebugCutaway(densityField);
         chunk.Build(densityField, materialField, IsoLevel);
 
         meshFilter.sharedMesh = chunk.Mesh;
         meshRenderer.sharedMaterials = GetMaterials();
+    }
+
+    private void ApplyDebugCutaway(DensityField densityField)
+    {
+        // 只用于 HeightField 调试；其他测试模式保持原样。
+        if (!debugCutaway) return;
+        if (densityMode != DensityGenerationMode.HeightField) return;
+
+        float width = Mathf.Max(0f, debugCutWidth);
+        if (width <= 0f) return;
+
+        float halfWidth = width * 0.5f;
+        float cutMinX = debugCutX - halfWidth;
+        float cutMaxX = debugCutX + halfWidth;
+
+        int minIndex = Mathf.FloorToInt(
+            (cutMinX - densityField.Origin.x) / densityField.CellSizeX
+        );
+        int maxIndex = Mathf.CeilToInt(
+            (cutMaxX - densityField.Origin.x) / densityField.CellSizeX
+        );
+
+        minIndex = Mathf.Clamp(minIndex, 0, densityField.SampleCountX - 1);
+        maxIndex = Mathf.Clamp(maxIndex, minIndex, densityField.SampleCountX - 1);
+
+        for (int x = minIndex; x <= maxIndex; x++)
+        {
+            for (int y = 0; y < densityField.SampleCountY; y++)
+            {
+                for (int z = 0; z < densityField.SampleCountZ; z++)
+                {
+                    densityField[x, y, z] = -1f;
+                }
+            }
+        }
     }
 
     private MaterialField GetMaterialFieldForDebug()
