@@ -47,7 +47,9 @@ public class DensityTerrain : MonoBehaviour
     public float dirtDepth = 3f;
 
     [Header("Rendering")]
-    public Material terrainMaterial;
+    public Material grassMaterial;
+    public Material dirtMaterial;
+    public Material stoneMaterial;
 
     [Tooltip("在 Editor 中修改参数时自动重新生成 Mesh")]
     public bool regenerateInEditor = true;
@@ -57,7 +59,8 @@ public class DensityTerrain : MonoBehaviour
     private MeshFilter meshFilter;
     private MeshRenderer meshRenderer;
     private TerrainChunk chunk;
-    private Material runtimeMaterial;
+    private Material[] runtimeMaterials = new Material[3];
+    private Material[] materialArray;
 
     private void OnEnable()
     {
@@ -82,18 +85,20 @@ public class DensityTerrain : MonoBehaviour
             chunk = null;
         }
 
-        if (runtimeMaterial != null)
+        for (int i = 0; i < runtimeMaterials.Length; i++)
         {
+            if (runtimeMaterials[i] == null) continue;
+
             if (Application.isPlaying)
             {
-                Object.Destroy(runtimeMaterial);
+                Object.Destroy(runtimeMaterials[i]);
             }
             else
             {
-                Object.DestroyImmediate(runtimeMaterial);
+                Object.DestroyImmediate(runtimeMaterials[i]);
             }
 
-            runtimeMaterial = null;
+            runtimeMaterials[i] = null;
         }
     }
 
@@ -115,7 +120,7 @@ public class DensityTerrain : MonoBehaviour
         chunk.Build(densityField, materialField, IsoLevel);
 
         meshFilter.sharedMesh = chunk.Mesh;
-        meshRenderer.sharedMaterial = GetMaterial();
+        meshRenderer.sharedMaterials = GetMaterials();
     }
 
     private MaterialField GetMaterialFieldForDebug()
@@ -263,41 +268,59 @@ public class DensityTerrain : MonoBehaviour
         );
     }
 
-    private Material GetMaterial()
+    private Material[] GetMaterials()
     {
-        if (terrainMaterial != null)
+        if (materialArray == null)
         {
-            return terrainMaterial;
+            materialArray = new Material[3];
         }
 
-        if (runtimeMaterial == null)
+        materialArray[0] = grassMaterial != null
+            ? grassMaterial
+            : GetRuntimeMaterial(0, new Color(0.35f, 0.65f, 0.25f), "Runtime Grass Material");
+
+        materialArray[1] = dirtMaterial != null
+            ? dirtMaterial
+            : GetRuntimeMaterial(1, new Color(0.45f, 0.30f, 0.18f), "Runtime Dirt Material");
+
+        materialArray[2] = stoneMaterial != null
+            ? stoneMaterial
+            : GetRuntimeMaterial(2, new Color(0.55f, 0.55f, 0.55f), "Runtime Stone Material");
+
+        return materialArray;
+    }
+
+    private Material GetRuntimeMaterial(int index, Color color, string materialName)
+    {
+        if (runtimeMaterials[index] != null)
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null) shader = Shader.Find("Standard");
-            if (shader == null) shader = Shader.Find("Sprites/Default");
-
-            if (shader == null)
-            {
-                Debug.LogWarning("DensityTerrain: 找不到可用的 Shader，无法创建默认地形材质");
-                return null;
-            }
-
-            runtimeMaterial = new Material(shader);
-            runtimeMaterial.name = "Runtime Terrain Material";
-            runtimeMaterial.hideFlags = HideFlags.DontSave;
-
-            Color color = new Color(0.45f, 0.55f, 0.35f);
-
-            if (runtimeMaterial.HasProperty("_BaseColor"))
-            {
-                runtimeMaterial.SetColor("_BaseColor", color);
-            }
-            else if (runtimeMaterial.HasProperty("_Color"))
-            {
-                runtimeMaterial.SetColor("_Color", color);
-            }
+            return runtimeMaterials[index];
         }
 
-        return runtimeMaterial;
+        Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+        if (shader == null) shader = Shader.Find("Standard");
+        if (shader == null) shader = Shader.Find("Sprites/Default");
+
+        if (shader == null)
+        {
+            Debug.LogWarning("DensityTerrain: 找不到可用的 Shader，无法创建默认地形材质");
+            return null;
+        }
+
+        Material material = new Material(shader);
+        material.name = materialName;
+        material.hideFlags = HideFlags.DontSave;
+
+        if (material.HasProperty("_BaseColor"))
+        {
+            material.SetColor("_BaseColor", color);
+        }
+        else if (material.HasProperty("_Color"))
+        {
+            material.SetColor("_Color", color);
+        }
+
+        runtimeMaterials[index] = material;
+        return material;
     }
 }

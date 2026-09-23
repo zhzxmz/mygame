@@ -44,16 +44,29 @@ public static class TerrainMeshGenerator
 
     public static Mesh Generate(DensityField field, float isoLevel = 0f)
     {
+        return Generate(field, null, isoLevel);
+    }
+
+    public static Mesh Generate(
+        DensityField field,
+        MaterialField materialField,
+        float isoLevel = 0f)
+    {
         Mesh mesh = new Mesh();
         mesh.name = "Density Terrain Mesh";
         mesh.hideFlags = HideFlags.DontSave;
         mesh.indexFormat = IndexFormat.UInt32;
 
         List<Vector3> vertices = new List<Vector3>();
-        List<int> triangles = new List<int>();
+        List<int>[] subMeshTriangles = new List<int>[3];
+        for (int i = 0; i < subMeshTriangles.Length; i++)
+        {
+            subMeshTriangles[i] = new List<int>();
+        }
 
         float[] cornerDensities = new float[8];
         Vector3[] cornerPositions = new Vector3[8];
+        MaterialType[] cornerMaterials = new MaterialType[8];
         Vector3[] edgeVertices = new Vector3[12];
 
         for (int x = 0; x < field.ResolutionX; x++)
@@ -74,6 +87,17 @@ public static class TerrainMeshGenerator
                         float density = field[sx, sy, sz];
                         cornerDensities[c] = density;
                         cornerPositions[c] = field.GetWorldPosition(sx, sy, sz);
+
+                        if (materialField != null)
+                        {
+                            cornerMaterials[c] = materialField[sx, sy, sz];
+                        }
+                        else
+                        {
+                            cornerMaterials[c] = density > isoLevel
+                                ? MaterialType.Stone
+                                : MaterialType.Air;
+                        }
 
                         if (density > isoLevel)
                         {
@@ -119,24 +143,90 @@ public static class TerrainMeshGenerator
                             }
                         }
 
+                        Vector3 triangleCenter = (v0 + v1 + v2) / 3f;
+                        MaterialType triangleMaterial = ResolveTriangleMaterial(
+                            triangleCenter,
+                            cornerPositions,
+                            cornerDensities,
+                            cornerMaterials,
+                            isoLevel
+                        );
+
+                        int subMeshIndex = GetSubMeshIndex(triangleMaterial);
+
                         int baseIndex = vertices.Count;
                         vertices.Add(v0);
                         vertices.Add(v1);
                         vertices.Add(v2);
-                        triangles.Add(baseIndex);
-                        triangles.Add(baseIndex + 1);
-                        triangles.Add(baseIndex + 2);
+
+                        List<int> subMesh = subMeshTriangles[subMeshIndex];
+                        subMesh.Add(baseIndex);
+                        subMesh.Add(baseIndex + 1);
+                        subMesh.Add(baseIndex + 2);
                     }
                 }
             }
         }
 
         mesh.SetVertices(vertices);
-        mesh.SetTriangles(triangles, 0);
+        mesh.subMeshCount = 3;
+        mesh.SetTriangles(subMeshTriangles[0], 0);
+        mesh.SetTriangles(subMeshTriangles[1], 1);
+        mesh.SetTriangles(subMeshTriangles[2], 2);
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
 
         return mesh;
+    }
+
+    /// <summary>
+    /// 为三角形选择一个主要 Material。
+    /// 第一版规则：找离三角形中心最近的实体采样点，使用该点的 MaterialField 值。
+    /// 不做复杂材料插值，仅做近邻采样。
+    /// </summary>
+    private static MaterialType ResolveTriangleMaterial(
+        Vector3 triangleCenter,
+        Vector3[] cornerPositions,
+        float[] cornerDensities,
+        MaterialType[] cornerMaterials,
+        float isoLevel)
+    {
+        int bestIndex = -1;
+        float bestDistance = float.MaxValue;
+
+        for (int c = 0; c < 8; c++)
+        {
+            if (cornerDensities[c] <= isoLevel) continue;
+
+            float distance = (cornerPositions[c] - triangleCenter).sqrMagnitude;
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = c;
+            }
+        }
+
+        if (bestIndex >= 0)
+        {
+            return cornerMaterials[bestIndex];
+        }
+
+        return MaterialType.Stone;
+    }
+
+    private static int GetSubMeshIndex(MaterialType material)
+    {
+        switch (material)
+        {
+            case MaterialType.Grass:
+                return 0;
+
+            case MaterialType.Dirt:
+                return 1;
+
+            default:
+                return 2;
+        }
     }
 
     private static Vector3 InterpolateEdge(

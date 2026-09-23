@@ -22,7 +22,7 @@ public class TerrainChunk
 
         Density = density;
         Material = material;
-        Mesh = TerrainMeshGenerator.Generate(density, isoLevel);
+        Mesh = TerrainMeshGenerator.Generate(density, material, isoLevel);
     }
 
     public void Dispose()
