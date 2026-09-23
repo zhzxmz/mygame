@@ -39,12 +39,37 @@ public class DensityTerrain : MonoBehaviour
     [Tooltip("球形空洞半径")]
     public float cavityRadius = 3f;
 
-    [Header("Material Layers")]
-    [Tooltip("地表以下 Grass 层厚度")]
+    [Header("Material Generation")]
+    [Tooltip("使用旧的 depth-based 简单规则")]
+    public bool useLegacyMaterialRules = false;
+
+    [Tooltip("Legacy：地表以下 Grass 判定厚度；v2：Grass 层最大厚度上限")]
     public float grassDepth = 1f;
 
-    [Tooltip("Grass 层以下 Dirt 层厚度")]
+    [Tooltip("Legacy：Grass 层以下 Dirt 判定厚度；v2 中保留兼容")]
     public float dirtDepth = 3f;
+
+    [Header("Terrain Generation v2")]
+    [Tooltip("风化强度：增加整体 Dirt 量")]
+    public float weatheringStrength = 0.8f;
+
+    [Tooltip("风化影响深度")]
+    public float weatheringDepth = 8f;
+
+    [Tooltip("缓坡角度阈值：小于此角度土壤完全稳定")]
+    public float gentleSlopeAngle = 15f;
+
+    [Tooltip("陡坡角度阈值：大于此角度土壤无法稳定")]
+    public float steepSlopeAngle = 45f;
+
+    [Tooltip("地貌重力强度：越大 Dirt 越容易向低处迁移")]
+    public float gravityStrength = 1f;
+
+    [Tooltip("世界生成时土壤重力沉积迭代次数")]
+    public int soilSimulationIterations = 4;
+
+    [Tooltip("草生长强度")]
+    public float grassStrength = 1f;
 
     [Header("Debug Cutaway")]
     [Tooltip("仅用于调试：在 HeightField 地形中切出一个垂直空气切面")]
@@ -310,6 +335,14 @@ public class DensityTerrain : MonoBehaviour
             cavityRadius,
             grassDepth,
             dirtDepth,
+            useLegacyMaterialRules,
+            weatheringStrength,
+            weatheringDepth,
+            gentleSlopeAngle,
+            steepSlopeAngle,
+            gravityStrength,
+            soilSimulationIterations,
+            grassStrength,
             out materialField
         );
     }

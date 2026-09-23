@@ -27,6 +27,14 @@ public static class DensityFieldGenerator
         float cavityRadius,
         float grassDepth,
         float dirtDepth,
+        bool useLegacyMaterialRules,
+        float weatheringStrength,
+        float weatheringDepth,
+        float gentleSlopeAngle,
+        float steepSlopeAngle,
+        float gravityStrength,
+        int soilSimulationIterations,
+        float grassStrength,
         out MaterialField materialField)
     {
         DensityField densityField = new DensityField(resolution, resolution, resolution, origin, size);
@@ -65,13 +73,31 @@ public static class DensityFieldGenerator
                 break;
         }
 
-        FillMaterialField(
-            mode,
-            densityField,
-            generatedMaterials,
-            grassDepth,
-            dirtDepth
-        );
+        if (mode == DensityGenerationMode.HeightField && !useLegacyMaterialRules)
+        {
+            FillHeightFieldMaterialV2(
+                densityField,
+                generatedMaterials,
+                grassDepth,
+                weatheringStrength,
+                weatheringDepth,
+                gentleSlopeAngle,
+                steepSlopeAngle,
+                gravityStrength,
+                soilSimulationIterations,
+                grassStrength
+            );
+        }
+        else
+        {
+            FillMaterialFieldSimple(
+                mode,
+                densityField,
+                generatedMaterials,
+                grassDepth,
+                dirtDepth
+            );
+        }
 
         materialField = generatedMaterials;
         return densityField;
@@ -182,12 +208,224 @@ public static class DensityFieldGenerator
     }
 
     /// <summary>
-    /// 根据 DensityField 生成 MaterialField。
-    /// HeightField 使用 Grass / Dirt / Stone 分层；
-    /// ThreeDimensional 和 SphereCavity 暂时只区分 Air / Stone。
-    /// Air 也会被明确写入 MaterialField。
+    /// HeightField v2 材料生成：
+    /// Stone -> Weathering -> Initial Dirt -> Slope Retention -> Gravity Deposition -> Final Dirt -> Grass。
+    /// 只修改 MaterialField，不修改 DensityField。
     /// </summary>
-    private static void FillMaterialField(
+    private static void FillHeightFieldMaterialV2(
+        DensityField densityField,
+        MaterialField materialField,
+        float grassDepth,
+        float weatheringStrength,
+        float weatheringDepth,
+        float gentleSlopeAngle,
+        float steepSlopeAngle,
+        float gravityStrength,
+        int soilSimulationIterations,
+        float grassStrength)
+    {
+        int sizeX = densityField.SampleCountX;
+        int sizeZ = densityField.SampleCountZ;
+
+        float[,] surfaceHeight = new float[sizeX, sizeZ];
+        float[,] slopeFactor = new float[sizeX, sizeZ];
+        float[,] soilThickness = new float[sizeX, sizeZ];
+
+        // 1. 从 DensityField 找出每个 column 的地表高度。
+        for (int x = 0; x < sizeX; x++)
+        {
+            for (int z = 0; z < sizeZ; z++)
+            {
+                surfaceHeight[x, z] = FindSurfaceHeight(densityField, x, z);
+            }
+        }
+
+        // 2. 局部坡度：0 = 平地，1 = 陡坡。
+        float gentle = Mathf.Max(0f, gentleSlopeAngle);
+        float steep = Mathf.Max(gentle + 0.001f, steepSlopeAngle);
+
+        for (int x = 0; x < sizeX; x++)
+        {
+            for (int z = 0; z < sizeZ; z++)
+            {
+                int xm = Mathf.Max(0, x - 1);
+                int xp = Mathf.Min(sizeX - 1, x + 1);
+                int zm = Mathf.Max(0, z - 1);
+                int zp = Mathf.Min(sizeZ - 1, z + 1);
+
+                float dx = (surfaceHeight[xp, z] - surfaceHeight[xm, z])
+                           / ((xp - xm) * densityField.CellSizeX);
+                float dz = (surfaceHeight[x, zp] - surfaceHeight[x, zm])
+                           / ((zp - zm) * densityField.CellSizeZ);
+
+                float slopeAngle = Mathf.Atan(Mathf.Sqrt(dx * dx + dz * dz))
+                                   * Mathf.Rad2Deg;
+
+                slopeFactor[x, z] = Mathf.Clamp01(
+                    Mathf.InverseLerp(gentle, steep, slopeAngle)
+                );
+            }
+        }
+
+        // 3. 风化：越接近地表的 Stone 越容易产生初始 Dirt。
+        float strength = Mathf.Max(0f, weatheringStrength);
+        float exposureDepth = Mathf.Max(0.0001f, weatheringDepth);
+
+        for (int x = 0; x < sizeX; x++)
+        {
+            for (int z = 0; z < sizeZ; z++)
+            {
+                float surface = surfaceHeight[x, z];
+                float columnSoil = 0f;
+
+                for (int y = 0; y < densityField.SampleCountY; y++)
+                {
+                    float worldY = densityField.Origin.y + y * densityField.CellSizeY;
+                    float depth = surface - worldY;
+
+                    if (depth <= 0f) continue;
+                    if (depth > exposureDepth) continue;
+
+                    float exposure = Mathf.Clamp01(1f - depth / exposureDepth);
+                    columnSoil += strength * exposure * densityField.CellSizeY;
+                }
+
+                // 4. 坡度稳定性：缓坡保留，陡坡流失。
+                columnSoil *= (1f - slopeFactor[x, z]);
+                soilThickness[x, z] = Mathf.Max(0f, columnSoil);
+            }
+        }
+
+        // 5. 重力沉积：Dirt 向较低的地表迁移。
+        int iterations = Mathf.Max(0, soilSimulationIterations);
+        float gravity = Mathf.Max(0f, gravityStrength);
+
+        for (int iteration = 0; iteration < iterations; iteration++)
+        {
+            float[,] nextSoil = (float[,])soilThickness.Clone();
+
+            for (int x = 0; x < sizeX; x++)
+            {
+                for (int z = 0; z < sizeZ; z++)
+                {
+                    float here = soilThickness[x, z];
+                    if (here <= 0f) continue;
+
+                    float slope = slopeFactor[x, z];
+                    if (slope <= 0f) continue;
+
+                    float moveFactor = Mathf.Clamp01(gravity * slope * 0.25f);
+                    if (moveFactor <= 0f) continue;
+
+                    float surface = surfaceHeight[x, z];
+
+                    float diffRight = 0f;
+                    float diffLeft = 0f;
+                    float diffUp = 0f;
+                    float diffDown = 0f;
+
+                    if (x + 1 < sizeX) diffRight = surface - surfaceHeight[x + 1, z];
+                    if (x - 1 >= 0) diffLeft = surface - surfaceHeight[x - 1, z];
+                    if (z + 1 < sizeZ) diffUp = surface - surfaceHeight[x, z + 1];
+                    if (z - 1 >= 0) diffDown = surface - surfaceHeight[x, z - 1];
+
+                    diffRight = Mathf.Max(0f, diffRight);
+                    diffLeft = Mathf.Max(0f, diffLeft);
+                    diffUp = Mathf.Max(0f, diffUp);
+                    diffDown = Mathf.Max(0f, diffDown);
+
+                    float totalDiff = diffRight + diffLeft + diffUp + diffDown;
+                    if (totalDiff <= 0.0001f) continue;
+
+                    float move = Mathf.Min(here, here * moveFactor);
+                    nextSoil[x, z] -= move;
+
+                    if (diffRight > 0f) nextSoil[x + 1, z] += move * diffRight / totalDiff;
+                    if (diffLeft > 0f) nextSoil[x - 1, z] += move * diffLeft / totalDiff;
+                    if (diffUp > 0f) nextSoil[x, z + 1] += move * diffUp / totalDiff;
+                    if (diffDown > 0f) nextSoil[x, z - 1] += move * diffDown / totalDiff;
+                }
+            }
+
+            soilThickness = nextSoil;
+        }
+
+        // 6. Grass：最终稳定 Dirt 表面才可能长草。
+        float maxGrassThickness = Mathf.Max(0f, grassDepth);
+        float grassAmountFactor = Mathf.Clamp01(grassStrength);
+
+        for (int x = 0; x < sizeX; x++)
+        {
+            for (int z = 0; z < sizeZ; z++)
+            {
+                float surface = surfaceHeight[x, z];
+                float soil = Mathf.Max(0f, soilThickness[x, z]);
+                float grassSlopeFactor = 1f - slopeFactor[x, z];
+
+                float grassThickness = Mathf.Min(
+                    soil,
+                    maxGrassThickness * grassAmountFactor * grassSlopeFactor
+                );
+
+                for (int y = 0; y < densityField.SampleCountY; y++)
+                {
+                    float density = densityField[x, y, z];
+
+                    if (density <= 0f)
+                    {
+                        materialField[x, y, z] = MaterialType.Air;
+                        continue;
+                    }
+
+                    float worldY = densityField.Origin.y + y * densityField.CellSizeY;
+                    float depth = surface - worldY;
+                    if (depth < 0f) depth = 0f;
+
+                    if (depth <= grassThickness)
+                    {
+                        materialField[x, y, z] = MaterialType.Grass;
+                    }
+                    else if (depth <= soil)
+                    {
+                        materialField[x, y, z] = MaterialType.Dirt;
+                    }
+                    else
+                    {
+                        materialField[x, y, z] = MaterialType.Stone;
+                    }
+                }
+            }
+        }
+    }
+
+    private static float FindSurfaceHeight(DensityField densityField, int x, int z)
+    {
+        for (int y = 0; y < densityField.SampleCountY - 1; y++)
+        {
+            float density0 = densityField[x, y, z];
+            float density1 = densityField[x, y + 1, z];
+
+            if (density0 > 0f && density1 <= 0f)
+            {
+                float t = density0 / (density0 - density1);
+                return densityField.Origin.y + (y + t) * densityField.CellSizeY;
+            }
+        }
+
+        // 没有找到地表交点：底部实体则视为地形顶部，否则视为底部。
+        if (densityField[x, 0, z] > 0f)
+        {
+            return densityField.Origin.y + densityField.Size.y;
+        }
+
+        return densityField.Origin.y;
+    }
+
+    /// <summary>
+    /// 简单的旧规则：HeightField 按 depth 直接分层；
+    /// ThreeDimensional / SphereCavity 只区分 Air / Stone。
+    /// </summary>
+    private static void FillMaterialFieldSimple(
         DensityGenerationMode mode,
         DensityField densityField,
         MaterialField materialField,
