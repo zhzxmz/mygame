@@ -24,23 +24,33 @@ public static class DensityFieldGenerator
         float noiseScale,
         float noiseStrength,
         Vector3 cavityCenterOffset,
-        float cavityRadius)
+        float cavityRadius,
+        float grassDepth,
+        float dirtDepth,
+        out MaterialField materialField)
     {
-        DensityField field = new DensityField(resolution, resolution, resolution, origin, size);
+        DensityField densityField = new DensityField(resolution, resolution, resolution, origin, size);
+        MaterialField generatedMaterials = new MaterialField(
+            resolution,
+            resolution,
+            resolution,
+            origin,
+            size
+        );
 
         switch (mode)
         {
             case DensityGenerationMode.HeightField:
-                FillHeightField(field, useNoise, height, noiseScale, noiseStrength);
+                FillHeightField(densityField, useNoise, height, noiseScale, noiseStrength);
                 break;
 
             case DensityGenerationMode.ThreeDimensional:
-                FillThreeDimensional(field, noiseScale, noiseStrength);
+                FillThreeDimensional(densityField, noiseScale, noiseStrength);
                 break;
 
             case DensityGenerationMode.SphereCavity:
                 FillSphereCavity(
-                    field,
+                    densityField,
                     useNoise,
                     height,
                     noiseScale,
@@ -51,11 +61,20 @@ public static class DensityFieldGenerator
                 break;
 
             default:
-                FillHeightField(field, useNoise, height, noiseScale, noiseStrength);
+                FillHeightField(densityField, useNoise, height, noiseScale, noiseStrength);
                 break;
         }
 
-        return field;
+        FillMaterialField(
+            mode,
+            densityField,
+            generatedMaterials,
+            grassDepth,
+            dirtDepth
+        );
+
+        materialField = generatedMaterials;
+        return densityField;
     }
 
     /// <summary>普通高度场地形：density = surfaceHeight(x,z) - y。</summary>
@@ -157,6 +176,65 @@ public static class DensityFieldGenerator
                     float cavityDensity = Vector3.Distance(world, cavityCenter) - radius;
 
                     field[x, y, z] = Mathf.Min(terrainDensity, cavityDensity);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 根据 DensityField 生成 MaterialField。
+    /// HeightField 使用 Grass / Dirt / Stone 分层；
+    /// ThreeDimensional 和 SphereCavity 暂时只区分 Air / Stone。
+    /// Air 也会被明确写入 MaterialField。
+    /// </summary>
+    private static void FillMaterialField(
+        DensityGenerationMode mode,
+        DensityField densityField,
+        MaterialField materialField,
+        float grassDepth,
+        float dirtDepth)
+    {
+        float grass = Mathf.Max(0f, grassDepth);
+        float dirt = Mathf.Max(0f, dirtDepth);
+        float dirtEnd = grass + dirt;
+
+        for (int x = 0; x < densityField.SampleCountX; x++)
+        {
+            for (int y = 0; y < densityField.SampleCountY; y++)
+            {
+                for (int z = 0; z < densityField.SampleCountZ; z++)
+                {
+                    float density = densityField[x, y, z];
+
+                    if (density < 0f)
+                    {
+                        materialField[x, y, z] = MaterialType.Air;
+                        continue;
+                    }
+
+                    if (mode == DensityGenerationMode.HeightField)
+                    {
+                        // HeightField 下 density = surfaceHeight - worldY，可直接作为地表以下深度。
+                        float depth = density;
+
+                        if (depth <= grass)
+                        {
+                            materialField[x, y, z] = MaterialType.Grass;
+                        }
+                        else if (depth <= dirtEnd)
+                        {
+                            materialField[x, y, z] = MaterialType.Dirt;
+                        }
+                        else
+                        {
+                            materialField[x, y, z] = MaterialType.Stone;
+                        }
+                    }
+                    else
+                    {
+                        // 3D 和球形空洞测试模式只做最简单的实体/空气区分。
+                        materialField[x, y, z] = MaterialType.Stone;
+                    }
                 }
             }
         }

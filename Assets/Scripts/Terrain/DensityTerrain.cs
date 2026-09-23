@@ -39,6 +39,13 @@ public class DensityTerrain : MonoBehaviour
     [Tooltip("球形空洞半径")]
     public float cavityRadius = 3f;
 
+    [Header("Material Layers")]
+    [Tooltip("地表以下 Grass 层厚度")]
+    public float grassDepth = 1f;
+
+    [Tooltip("Grass 层以下 Dirt 层厚度")]
+    public float dirtDepth = 3f;
+
     [Header("Rendering")]
     public Material terrainMaterial;
 
@@ -104,11 +111,104 @@ public class DensityTerrain : MonoBehaviour
             chunk.Dispose();
         }
 
-        DensityField densityField = BuildDensityField();
-        chunk.Build(densityField, IsoLevel);
+        DensityField densityField = BuildDensityField(out MaterialField materialField);
+        chunk.Build(densityField, materialField, IsoLevel);
 
         meshFilter.sharedMesh = chunk.Mesh;
         meshRenderer.sharedMaterial = GetMaterial();
+    }
+
+    private MaterialField GetMaterialFieldForDebug()
+    {
+        if (chunk == null || chunk.Material == null)
+        {
+            Regenerate();
+        }
+
+        return chunk != null ? chunk.Material : null;
+    }
+
+    [ContextMenu("Log Material At Center")]
+    public void LogMaterialAtCenter()
+    {
+        MaterialField materialField = GetMaterialFieldForDebug();
+        if (materialField == null)
+        {
+            Debug.LogWarning("DensityTerrain: MaterialField 尚未生成");
+            return;
+        }
+
+        Vector3 center = materialField.Origin + materialField.Size * 0.5f;
+        LogMaterialAtWorldPoint(materialField, center, "Center");
+
+        // 额外打印一条竖直采样线，便于看到 Air / Grass / Dirt / Stone。
+        float step = Mathf.Max(1f, materialField.Size.y / 8f);
+        for (float y = materialField.Origin.y + materialField.Size.y;
+             y >= materialField.Origin.y;
+             y -= step)
+        {
+            Vector3 point = new Vector3(center.x, y, center.z);
+            LogMaterialAtWorldPoint(materialField, point, "Column");
+        }
+    }
+
+    [ContextMenu("Log Material Summary")]
+    public void LogMaterialSummary()
+    {
+        MaterialField materialField = GetMaterialFieldForDebug();
+        if (materialField == null) return;
+
+        int air = 0;
+        int grass = 0;
+        int dirt = 0;
+        int stone = 0;
+
+        for (int x = 0; x < materialField.SampleCountX; x++)
+        {
+            for (int y = 0; y < materialField.SampleCountY; y++)
+            {
+                for (int z = 0; z < materialField.SampleCountZ; z++)
+                {
+                    switch (materialField[x, y, z])
+                    {
+                        case MaterialType.Air: air++; break;
+                        case MaterialType.Grass: grass++; break;
+                        case MaterialType.Dirt: dirt++; break;
+                        case MaterialType.Stone: stone++; break;
+                    }
+                }
+            }
+        }
+
+        Debug.Log($"[MaterialField] Air={air}, Grass={grass}, Dirt={dirt}, Stone={stone}");
+    }
+
+    private void LogMaterialAtWorldPoint(
+        MaterialField materialField,
+        Vector3 world,
+        string label)
+    {
+        int x = Mathf.Clamp(
+            Mathf.RoundToInt((world.x - materialField.Origin.x) / materialField.CellSizeX),
+            0,
+            materialField.SampleCountX - 1
+        );
+
+        int y = Mathf.Clamp(
+            Mathf.RoundToInt((world.y - materialField.Origin.y) / materialField.CellSizeY),
+            0,
+            materialField.SampleCountY - 1
+        );
+
+        int z = Mathf.Clamp(
+            Mathf.RoundToInt((world.z - materialField.Origin.z) / materialField.CellSizeZ),
+            0,
+            materialField.SampleCountZ - 1
+        );
+
+        Debug.Log(
+            $"[MaterialField] {label} world={world} index=({x},{y},{z}) material={materialField[x, y, z]}"
+        );
     }
 
     private void EnsureComponents()
@@ -134,7 +234,7 @@ public class DensityTerrain : MonoBehaviour
         }
     }
 
-    private DensityField BuildDensityField()
+    private DensityField BuildDensityField(out MaterialField materialField)
     {
         int cells = Mathf.Max(1, resolution);
 
@@ -156,7 +256,10 @@ public class DensityTerrain : MonoBehaviour
             noiseScale,
             noiseStrength,
             cavityCenterOffset,
-            cavityRadius
+            cavityRadius,
+            grassDepth,
+            dirtDepth,
+            out materialField
         );
     }
 
