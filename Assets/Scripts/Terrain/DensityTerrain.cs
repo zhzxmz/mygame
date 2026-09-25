@@ -266,6 +266,70 @@ public class DensityTerrain : MonoBehaviour
         return chunk != null ? chunk.Material : null;
     }
 
+    [ContextMenu("Log Mesh Summary")]
+    public void LogMeshSummary()
+    {
+        if (chunk == null || chunk.Mesh == null)
+        {
+            Regenerate();
+        }
+
+        EnsureComponents();
+
+        Mesh mesh = chunk != null ? chunk.Mesh : null;
+        if (mesh == null)
+        {
+            Debug.LogWarning("DensityTerrain: Mesh 尚未生成");
+            return;
+        }
+
+        int subMeshCount = mesh.subMeshCount;
+        int subMesh0IndexCount = subMeshCount > 0 ? mesh.GetTriangles(0).Length : 0;
+        int subMesh1IndexCount = subMeshCount > 1 ? mesh.GetTriangles(1).Length : 0;
+        int subMesh2IndexCount = subMeshCount > 2 ? mesh.GetTriangles(2).Length : 0;
+
+        Bounds bounds = mesh.bounds;
+
+        Material[] materials = meshRenderer != null ? meshRenderer.sharedMaterials : null;
+        string material0 = materials != null && materials.Length > 0 && materials[0] != null
+            ? materials[0].name
+            : "null";
+        string material1 = materials != null && materials.Length > 1 && materials[1] != null
+            ? materials[1].name
+            : "null";
+        string material2 = materials != null && materials.Length > 2 && materials[2] != null
+            ? materials[2].name
+            : "null";
+
+        bool filterMatches = meshFilter != null && meshFilter.sharedMesh == mesh;
+
+        Debug.Log(
+            "[TerrainMesh]\n" +
+            $"Mesh exists = {mesh != null}\n\n" +
+            $"Vertex Count = {mesh.vertexCount}\n" +
+            $"SubMesh Count = {subMeshCount}\n\n" +
+            "SubMesh 0:\n" +
+            $"Triangle Index Count = {subMesh0IndexCount}\n\n" +
+            "SubMesh 1:\n" +
+            $"Triangle Index Count = {subMesh1IndexCount}\n\n" +
+            "SubMesh 2:\n" +
+            $"Triangle Index Count = {subMesh2IndexCount}\n\n" +
+            "Bounds:\n" +
+            $"center = {bounds.center}\n" +
+            $"size = {bounds.size}\n" +
+            $"min = {bounds.min}\n" +
+            $"max = {bounds.max}\n\n" +
+            $"MeshFilter.sharedMesh == chunk.Mesh = {filterMatches}\n\n" +
+            $"MeshRenderer.enabled = {(meshRenderer != null ? meshRenderer.enabled.ToString() : "meshRenderer null")}\n\n" +
+            $"Shared Materials Count = {(materials != null ? materials.Length : 0)}\n" +
+            $"Material[0] = {material0}\n" +
+            $"Material[1] = {material1}\n" +
+            $"Material[2] = {material2}\n\n" +
+            $"GameObject activeSelf = {gameObject.activeSelf}\n" +
+            $"GameObject activeInHierarchy = {gameObject.activeInHierarchy}"
+        );
+    }
+
     [ContextMenu("Log Material At Center")]
     public void LogMaterialAtCenter()
     {

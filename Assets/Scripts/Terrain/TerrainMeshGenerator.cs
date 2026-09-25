@@ -64,6 +64,11 @@ public static class TerrainMeshGenerator
             subMeshTriangles[i] = new List<int>();
         }
 
+        int processedCubes = 0;
+        int grassTriangles = 0;
+        int dirtTriangles = 0;
+        int stoneTriangles = 0;
+
         float[] cornerDensities = new float[8];
         Vector3[] cornerPositions = new Vector3[8];
         MaterialType[] cornerMaterials = new MaterialType[8];
@@ -106,6 +111,8 @@ public static class TerrainMeshGenerator
                     }
 
                     if (cubeIndex == 0 || cubeIndex == 255) continue;
+
+                    processedCubes++;
 
                     for (int e = 0; e < 12; e++)
                     {
@@ -153,6 +160,9 @@ public static class TerrainMeshGenerator
                         );
 
                         int subMeshIndex = GetSubMeshIndex(triangleMaterial);
+                        if (subMeshIndex == 0) grassTriangles++;
+                        else if (subMeshIndex == 1) dirtTriangles++;
+                        else stoneTriangles++;
 
                         int baseIndex = vertices.Count;
                         vertices.Add(v0);
@@ -175,6 +185,15 @@ public static class TerrainMeshGenerator
         mesh.SetTriangles(subMeshTriangles[2], 2);
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
+
+        Debug.Log(
+            "[TerrainMeshGenerator]\n" +
+            $"Processed Cubes = {processedCubes}\n" +
+            $"Generated Triangles = {grassTriangles + dirtTriangles + stoneTriangles}\n" +
+            $"Grass Triangles = {grassTriangles}\n" +
+            $"Dirt Triangles = {dirtTriangles}\n" +
+            $"Stone Triangles = {stoneTriangles}"
+        );
 
         return mesh;
     }
