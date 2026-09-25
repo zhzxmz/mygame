@@ -194,6 +194,68 @@ public class DensityTerrain : MonoBehaviour
         }
     }
 
+    [ContextMenu("Log Density Summary")]
+    public void LogDensitySummary()
+    {
+        if (chunk == null || chunk.Density == null)
+        {
+            Regenerate();
+        }
+
+        DensityField densityField = chunk != null ? chunk.Density : null;
+        if (densityField == null)
+        {
+            Debug.LogWarning("DensityTerrain: DensityField 尚未生成");
+            return;
+        }
+
+        float min = float.MaxValue;
+        float max = float.MinValue;
+        double sum = 0.0;
+        long solid = 0;
+        long air = 0;
+
+        for (int x = 0; x < densityField.SampleCountX; x++)
+        {
+            for (int y = 0; y < densityField.SampleCountY; y++)
+            {
+                for (int z = 0; z < densityField.SampleCountZ; z++)
+                {
+                    float density = densityField[x, y, z];
+
+                    if (density < min) min = density;
+                    if (density > max) max = density;
+
+                    sum += density;
+
+                    if (density > IsoLevel)
+                    {
+                        solid++;
+                    }
+                    else
+                    {
+                        air++;
+                    }
+                }
+            }
+        }
+
+        long total = solid + air;
+        float average = total > 0 ? (float)(sum / total) : 0f;
+        float solidRatio = total > 0 ? (float)solid / total : 0f;
+
+        Debug.Log(
+            "[DensityField]\n" +
+            $"Min = {min}\n" +
+            $"Max = {max}\n" +
+            $"Average = {average}\n" +
+            $"Solid = {solid}\n" +
+            $"Air = {air}\n" +
+            $"Total = {total}\n" +
+            $"Solid Ratio = {solidRatio}"
+        );
+    }
+
     private MaterialField GetMaterialFieldForDebug()
     {
         if (chunk == null || chunk.Material == null)
