@@ -290,6 +290,27 @@ public class DensityTerrain : MonoBehaviour
 
         Bounds bounds = mesh.bounds;
 
+        Vector3[] vertices = mesh.vertices;
+        Vector3 vertexMin = Vector3.zero;
+        Vector3 vertexMax = Vector3.zero;
+
+        if (vertices != null && vertices.Length > 0)
+        {
+            vertexMin = vertices[0];
+            vertexMax = vertices[0];
+
+            for (int i = 1; i < vertices.Length; i++)
+            {
+                Vector3 v = vertices[i];
+                if (v.x < vertexMin.x) vertexMin.x = v.x;
+                if (v.y < vertexMin.y) vertexMin.y = v.y;
+                if (v.z < vertexMin.z) vertexMin.z = v.z;
+                if (v.x > vertexMax.x) vertexMax.x = v.x;
+                if (v.y > vertexMax.y) vertexMax.y = v.y;
+                if (v.z > vertexMax.z) vertexMax.z = v.z;
+            }
+        }
+
         Material[] materials = meshRenderer != null ? meshRenderer.sharedMaterials : null;
         string material0 = materials != null && materials.Length > 0 && materials[0] != null
             ? materials[0].name
@@ -319,6 +340,8 @@ public class DensityTerrain : MonoBehaviour
             $"size = {bounds.size}\n" +
             $"min = {bounds.min}\n" +
             $"max = {bounds.max}\n\n" +
+            $"Vertex Min = {vertexMin}\n" +
+            $"Vertex Max = {vertexMax}\n\n" +
             $"MeshFilter.sharedMesh == chunk.Mesh = {filterMatches}\n\n" +
             $"MeshRenderer.enabled = {(meshRenderer != null ? meshRenderer.enabled.ToString() : "meshRenderer null")}\n\n" +
             $"Shared Materials Count = {(materials != null ? materials.Length : 0)}\n" +
