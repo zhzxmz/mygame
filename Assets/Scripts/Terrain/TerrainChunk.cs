@@ -2,11 +2,14 @@ using UnityEngine;
 
 /// <summary>
 /// 一个地形 Chunk 的数据与 Mesh。
-/// Density 表示形状，Material 表示实体内容，Mesh 只是生成结果。
-/// 当前阶段只创建一个 Chunk；未来可以扩展为多 Chunk 管理。
+/// Chunk 只表示连续 Density 世界中的一个空间分块，不是 Minecraft 方块容器。
 /// </summary>
 public class TerrainChunk
 {
+    public Vector3Int Coordinate { get; private set; }
+    public Vector3 ChunkSize { get; private set; }
+    public Vector3 ChunkOrigin { get; private set; }
+
     public DensityField Density { get; private set; }
     public MaterialField Material { get; private set; }
     public Mesh Mesh { get; private set; }
@@ -14,6 +17,17 @@ public class TerrainChunk
     public bool IsBuilt
     {
         get { return Density != null && Material != null && Mesh != null; }
+    }
+
+    public TerrainChunk(Vector3Int coordinate, Vector3 chunkSize)
+    {
+        Coordinate = coordinate;
+        ChunkSize = chunkSize;
+        ChunkOrigin = new Vector3(
+            coordinate.x * chunkSize.x,
+            coordinate.y * chunkSize.y,
+            coordinate.z * chunkSize.z
+        );
     }
 
     public void Build(DensityField density, MaterialField material, float isoLevel)
