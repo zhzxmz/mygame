@@ -116,10 +116,14 @@ public class DensityTerrain : MonoBehaviour
     private Material[] runtimeMaterials = new Material[3];
     private Material[] materialArray;
 
+#if UNITY_EDITOR
+    private bool editorRegenerateQueued;
+#endif
+
     private void OnEnable()
     {
         if (!gameObject.scene.IsValid()) return;
-        Regenerate();
+        RequestRegenerate();
     }
 
     private void OnValidate()
@@ -128,8 +132,42 @@ public class DensityTerrain : MonoBehaviour
         if (!isActiveAndEnabled) return;
         if (!gameObject.scene.IsValid()) return;
 
+        RequestRegenerate();
+    }
+
+    /// <summary>
+    /// Editor 下把重新生成延迟到 EditorApplication.delayCall，
+    /// 避免在 OnValidate 生命周期里调用 DestroyImmediate。
+    /// 运行时仍然直接 Regenerate。
+    /// </summary>
+    private void RequestRegenerate()
+    {
+#if UNITY_EDITOR
+        if (!Application.isPlaying)
+        {
+            if (editorRegenerateQueued) return;
+
+            editorRegenerateQueued = true;
+            UnityEditor.EditorApplication.delayCall += DelayedRegenerate;
+            return;
+        }
+#endif
+
         Regenerate();
     }
+
+#if UNITY_EDITOR
+    private void DelayedRegenerate()
+    {
+        editorRegenerateQueued = false;
+
+        if (this == null) return;
+        if (!isActiveAndEnabled) return;
+        if (!gameObject.scene.IsValid()) return;
+
+        Regenerate();
+    }
+#endif
 
     private void OnDestroy()
     {
@@ -155,6 +193,15 @@ public class DensityTerrain : MonoBehaviour
     [ContextMenu("Regenerate Terrain")]
     public void Regenerate()
     {
+#if UNITY_EDITOR
+        // 如果已经排队了 Editor 延迟生成，先取消，避免手动点击后重复生成。
+        if (!Application.isPlaying && editorRegenerateQueued)
+        {
+            UnityEditor.EditorApplication.delayCall -= DelayedRegenerate;
+            editorRegenerateQueued = false;
+        }
+#endif
+
         ClearChunks();
 
         Vector3 effectiveChunkSize = GetEffectiveChunkSize();
