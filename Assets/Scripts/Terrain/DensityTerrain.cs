@@ -3,27 +3,37 @@ using UnityEngine;
 
 /// <summary>
 /// Terrain / World prototype controller。
-/// 负责 Inspector 参数、Chunk 网格创建、调用 DensityFieldGenerator，并把每个 Chunk 的 Mesh 显示到独立 GameObject。
-/// 不把 Unity Mesh 当作源数据；DensityField + MaterialField 才是世界数据。
+/// 负责 Inspector 参数、Chunk 网格创建、坐标查询、调用 DensityFieldGenerator，
+/// 并把每个 Chunk 的 Chunk-local Mesh 显示到独立 GameObject。
+/// 地形数据统一使用 Terrain Local Space；Root Transform 负责世界空间放置。
+/// 不把 Unity Mesh 当作源数据；DensityField + MaterialField 才是权威地形状态。
 /// </summary>
 [ExecuteAlways]
 public class DensityTerrain : MonoBehaviour
 {
     [Header("Terrain Size (Legacy Fallback)")]
-    [Tooltip("当 chunkSize 未设置时作为单 Chunk 尺寸使用，兼容旧场景")]
+    [Tooltip("Legacy：当 chunkVoxelSize / chunkSize 都未设置时，作为单个 Chunk 的 Terrain Local Space 尺寸")]
     public Vector3 terrainSize = new Vector3(64f, 32f, 64f);
 
     [Header("Chunk Grid")]
-    [Tooltip("每个 Chunk 的世界空间尺寸；任一轴 <= 0 时回退到 terrainSize")]
+    [Tooltip("Legacy：Chunk 的 Terrain Local Space 尺寸；优先使用 chunkVoxelSize；任一轴 <= 0 时回退到 terrainSize")]
     public Vector3 chunkSize = Vector3.zero;
 
     [Tooltip("Chunk 数量，必须 >= 1")]
     public Vector3Int chunkCount = new Vector3Int(1, 1, 1);
 
-    [Tooltip("Chunk 起始整数坐标，可为负")]
+    [Tooltip("Chunk 起始绝对整数坐标，可为负；只决定生成范围，不改变绝对坐标计算")]
     public Vector3Int chunkStartCoordinate = Vector3Int.zero;
 
-    [Tooltip("每个 Chunk 内每个轴上的采样单元格数量；SampleCount = resolution + 1")]
+    [Header("Voxel / Chunk Coordinate (V2)")]
+    [Tooltip("临时实现值：一个逻辑 Voxel 在 Terrain Local Space 中的尺寸。Voxel != Density Sample。")]
+    public float voxelSize = 0.1f;
+
+    [Tooltip("临时实现值：每个 Chunk 每个轴的逻辑 Voxel 数量。任一轴 <= 0 时从 chunkSize / terrainSize 临时推导。ChunkWorldSize = VoxelSize × ChunkVoxelSize。")]
+    public Vector3Int chunkVoxelSize = Vector3Int.zero;
+
+    [Header("Density Field Sampling")]
+    [Tooltip("每个 Chunk 内每个轴上的采样单元格数量；SampleCount = resolution + 1；与 VoxelSize 无关")]
     [Min(1)]
     public int resolution = 24;
 
@@ -33,7 +43,7 @@ public class DensityTerrain : MonoBehaviour
     [Header("Density")]
     public bool useNoise = true;
 
-    [Tooltip("HeightField 基础地表高度（世界 Y）")]
+    [Tooltip("HeightField 基础地表高度（Terrain Local Y）")]
     public float height = 16f;
 
     [Tooltip("噪声频率")]
@@ -43,7 +53,7 @@ public class DensityTerrain : MonoBehaviour
     public float noiseStrength = 4f;
 
     [Header("Sphere Cavity Debug")]
-    [Tooltip("球形空洞中心相对地形 Origin 的偏移")]
+    [Tooltip("球形空洞在 Terrain Local Space 中的绝对球心；多 Chunk 时不会按 Chunk Origin 重复")]
     public Vector3 cavityCenterOffset = new Vector3(0f, 6f, 0f);
 
     [Tooltip("球形空洞半径")]
@@ -85,7 +95,7 @@ public class DensityTerrain : MonoBehaviour
     [Tooltip("仅用于调试：在第一个 HeightField Chunk 中切出一个垂直空气切面")]
     public bool debugCutaway = false;
 
-    [Tooltip("切面中心的世界 X 坐标")]
+    [Tooltip("切面中心在 Terrain Local Space 中的 X 坐标")]
     public float debugCutX = 0f;
 
     [Tooltip("切面宽度")]
@@ -104,6 +114,7 @@ public class DensityTerrain : MonoBehaviour
     private class ChunkEntry
     {
         public TerrainChunk Chunk;
+        public TerrainChunkView View;
         public GameObject GameObject;
         public MeshFilter MeshFilter;
         public MeshRenderer MeshRenderer;
@@ -115,6 +126,22 @@ public class DensityTerrain : MonoBehaviour
 
     private Material[] runtimeMaterials = new Material[3];
     private Material[] materialArray;
+    private bool loggedTemporaryVoxelConfig;
+
+    public float EffectiveVoxelSize
+    {
+        get { return Mathf.Max(0.0001f, voxelSize); }
+    }
+
+    public Vector3Int EffectiveChunkVoxelSize
+    {
+        get { return GetEffectiveChunkVoxelSize(); }
+    }
+
+    public Vector3 EffectiveChunkWorldSize
+    {
+        get { return GetEffectiveChunkWorldSize(GetEffectiveChunkVoxelSize()); }
+    }
 
 #if UNITY_EDITOR
     private bool editorRegenerateQueued;
@@ -204,7 +231,11 @@ public class DensityTerrain : MonoBehaviour
 
         ClearChunks();
 
-        Vector3 effectiveChunkSize = GetEffectiveChunkSize();
+        float effectiveVoxelSize = EffectiveVoxelSize;
+        Vector3Int effectiveChunkVoxelSize = GetEffectiveChunkVoxelSize();
+        Vector3 effectiveChunkWorldSize = GetEffectiveChunkWorldSize(
+            effectiveChunkVoxelSize
+        );
         Vector3Int count = GetPositiveChunkCount();
 
         for (int x = 0; x < count.x; x++)
@@ -220,25 +251,75 @@ public class DensityTerrain : MonoBehaviour
                     );
 
                     bool isFirstChunk = x == 0 && y == 0 && z == 0;
-                    BuildChunk(coordinate, effectiveChunkSize, isFirstChunk);
+                    BuildChunk(
+                        coordinate,
+                        effectiveVoxelSize,
+                        effectiveChunkVoxelSize,
+                        effectiveChunkWorldSize,
+                        isFirstChunk
+                    );
                 }
             }
         }
     }
 
-    private void BuildChunk(Vector3Int coordinate, Vector3 size, bool isFirstChunk)
+    [ContextMenu("Mark First Chunk Dirty")]
+    public void MarkFirstChunkDirty()
     {
-        TerrainChunk chunk = new TerrainChunk(coordinate, size);
+        EnsureChunksForDebug();
 
-        // ChunkOrigin 是网格内的逻辑原点；真正生成 Density 时使用世界坐标。
-        Vector3 worldOrigin = transform.position + chunk.ChunkOrigin;
+        if (chunks.Count == 0) return;
+
+        chunks[0].Chunk.MarkDirty();
+        Debug.Log(
+            $"[TerrainChunk] Marked dirty: {chunks[0].Chunk.Coordinate}"
+        );
+    }
+
+    [ContextMenu("Rebuild Dirty Chunks")]
+    public void RebuildDirtyChunks()
+    {
+        EnsureChunksForDebug();
+
+        int rebuilt = 0;
+
+        for (int i = 0; i < chunks.Count; i++)
+        {
+            ChunkEntry entry = chunks[i];
+            if (entry.Chunk == null || !entry.Chunk.IsDirty) continue;
+
+            if (!entry.Chunk.RebuildMesh()) continue;
+
+            SyncChunkMesh(entry);
+
+            rebuilt++;
+        }
+
+        Debug.Log($"[TerrainChunk] Rebuilt dirty chunks = {rebuilt}");
+    }
+
+    private void BuildChunk(
+        Vector3Int coordinate,
+        float effectiveVoxelSize,
+        Vector3Int effectiveChunkVoxelSize,
+        Vector3 chunkWorldSize,
+        bool isFirstChunk)
+    {
+        TerrainChunk chunk = new TerrainChunk(
+            coordinate,
+            effectiveVoxelSize,
+            effectiveChunkVoxelSize
+        );
+
+        // 地形数据使用 Terrain Local Space；World Generation 也只接收 Local 坐标。
+        Vector3 terrainLocalOrigin = chunk.ChunkOrigin;
 
         MaterialField materialField;
         DensityField densityField = DensityFieldGenerator.Generate(
             densityMode,
             Mathf.Max(1, resolution),
-            worldOrigin,
-            size,
+            terrainLocalOrigin,
+            chunkWorldSize,
             useNoise,
             height,
             noiseScale,
@@ -269,23 +350,42 @@ public class DensityTerrain : MonoBehaviour
         GameObject chunkObject = new GameObject(
             $"Chunk_{coordinate.x}_{coordinate.y}_{coordinate.z}"
         );
+
+        // Chunk 使用 DensityTerrain 根对象的 Layer，
+        // 保证 Player 的 groundLayer 查询能命中运行时生成的 Terrain MeshCollider。
+        chunkObject.layer = gameObject.layer;
+
+        // Chunk GameObject / Mesh 都是运行时派生对象，不写入 Scene。
+        // Scene 只保存 DensityTerrain 配置和 generation parameters。
+        chunkObject.hideFlags = HideFlags.DontSave;
+
         chunkObject.transform.SetParent(transform, false);
 
-        // 当前 TerrainMeshGenerator 输出 world-space 顶点；
-        // Chunk GameObject 保持 local zero，避免与顶点世界坐标发生二次位移。
-        chunkObject.transform.localPosition = Vector3.zero;
+        // Mesh 已经是 Chunk Local Space；
+        // Chunk GameObject 只负责在 Terrain Local Space 中放置 Chunk，Root Transform 再负责世界空间。
+        chunkObject.transform.localPosition = chunk.ChunkOrigin;
         chunkObject.transform.localRotation = Quaternion.identity;
         chunkObject.transform.localScale = Vector3.one;
 
+        TerrainChunkView chunkView = chunkObject.AddComponent<TerrainChunkView>();
+        chunkView.Coordinate = coordinate;
+        chunkView.Chunk = chunk;
+
         MeshFilter chunkFilter = chunkObject.AddComponent<MeshFilter>();
         MeshRenderer chunkRenderer = chunkObject.AddComponent<MeshRenderer>();
+        MeshCollider chunkCollider = chunkObject.AddComponent<MeshCollider>();
 
-        chunkFilter.sharedMesh = chunk.Mesh;
+        chunkView.MeshFilter = chunkFilter;
+        chunkView.MeshRenderer = chunkRenderer;
+        chunkView.MeshCollider = chunkCollider;
+        chunkView.SetMesh(chunk.Mesh);
+
         chunkRenderer.sharedMaterials = GetMaterials();
 
         ChunkEntry entry = new ChunkEntry
         {
             Chunk = chunk,
+            View = chunkView,
             GameObject = chunkObject,
             MeshFilter = chunkFilter,
             MeshRenderer = chunkRenderer
@@ -308,22 +408,80 @@ public class DensityTerrain : MonoBehaviour
 
             if (entry.GameObject != null)
             {
-                if (Application.isPlaying)
-                {
-                    Object.Destroy(entry.GameObject);
-                }
-                else
-                {
-                    Object.DestroyImmediate(entry.GameObject);
-                }
+                DestroyChunkObject(entry.GameObject);
             }
         }
 
         chunks.Clear();
         chunkLookup.Clear();
+
+        // Domain Reload / Scene Reload 后 chunks 会变成空列表，
+        // 但旧的 Chunk GameObject 可能仍留在场景中。
+        // 只清理 Terrain 自己管理的 Chunk：有 TerrainChunkView 标记，
+        // 或旧版本生成的 Chunk_* + MeshFilter + MeshRenderer 对象。
+        DestroyUntrackedChunkObjects();
     }
 
-    private Vector3 GetEffectiveChunkSize()
+    private void DestroyUntrackedChunkObjects()
+    {
+        for (int i = transform.childCount - 1; i >= 0; i--)
+        {
+            Transform child = transform.GetChild(i);
+            if (child == null) continue;
+
+            GameObject childObject = child.gameObject;
+            if (childObject == null) continue;
+
+            bool hasChunkView =
+                childObject.GetComponent<TerrainChunkView>() != null;
+            bool isLegacyChunk = IsLegacyChunkObject(childObject);
+
+            if (!hasChunkView && !isLegacyChunk) continue;
+
+            DestroyChunkObject(childObject);
+        }
+    }
+
+    private static bool IsLegacyChunkObject(GameObject gameObject)
+    {
+        if (gameObject == null) return false;
+        if (!gameObject.name.StartsWith("Chunk_")) return false;
+        if (gameObject.GetComponent<MeshFilter>() == null) return false;
+        if (gameObject.GetComponent<MeshRenderer>() == null) return false;
+
+        return true;
+    }
+
+    private static void DestroyChunkObject(GameObject gameObject)
+    {
+        if (gameObject == null) return;
+
+        if (Application.isPlaying)
+        {
+            Object.Destroy(gameObject);
+        }
+        else
+        {
+            Object.DestroyImmediate(gameObject);
+        }
+    }
+
+    private static void SyncChunkMesh(ChunkEntry entry)
+    {
+        if (entry == null || entry.Chunk == null) return;
+
+        if (entry.View != null && entry.View.MeshFilter != null)
+        {
+            entry.View.Chunk = entry.Chunk;
+            entry.View.SetMesh(entry.Chunk.Mesh);
+        }
+        else if (entry.MeshFilter != null)
+        {
+            entry.MeshFilter.sharedMesh = entry.Chunk.Mesh;
+        }
+    }
+
+    private Vector3 GetLegacyChunkSize()
     {
         if (chunkSize.x > 0f && chunkSize.y > 0f && chunkSize.z > 0f)
         {
@@ -337,6 +495,50 @@ public class DensityTerrain : MonoBehaviour
         );
     }
 
+    private Vector3Int GetEffectiveChunkVoxelSize()
+    {
+        Vector3Int configured = chunkVoxelSize;
+
+        if (configured.x > 0 && configured.y > 0 && configured.z > 0)
+        {
+            return configured;
+        }
+
+        // 临时兼容：还没有显式配置 ChunkVoxelSize 时，从旧 chunkSize / terrainSize 推导。
+        // VoxelSize / ChunkVoxelSize / DensityField Resolution 仍然是三个独立概念。
+        Vector3 legacySize = GetLegacyChunkSize();
+        float effectiveVoxelSize = EffectiveVoxelSize;
+
+        Vector3Int derived = new Vector3Int(
+            Mathf.Max(1, Mathf.RoundToInt(legacySize.x / effectiveVoxelSize)),
+            Mathf.Max(1, Mathf.RoundToInt(legacySize.y / effectiveVoxelSize)),
+            Mathf.Max(1, Mathf.RoundToInt(legacySize.z / effectiveVoxelSize))
+        );
+
+        if (!loggedTemporaryVoxelConfig)
+        {
+            loggedTemporaryVoxelConfig = true;
+
+            Debug.LogWarning(
+                "[DensityTerrain] chunkVoxelSize 未显式配置，使用临时推导值 " +
+                $"{derived}（VoxelSize={effectiveVoxelSize}, LegacySize={legacySize}）"
+            );
+        }
+
+        return derived;
+    }
+
+    private Vector3 GetEffectiveChunkWorldSize(Vector3Int effectiveChunkVoxelSize)
+    {
+        float size = EffectiveVoxelSize;
+
+        return new Vector3(
+            size * Mathf.Max(1, effectiveChunkVoxelSize.x),
+            size * Mathf.Max(1, effectiveChunkVoxelSize.y),
+            size * Mathf.Max(1, effectiveChunkVoxelSize.z)
+        );
+    }
+
     private Vector3Int GetPositiveChunkCount()
     {
         return new Vector3Int(
@@ -344,6 +546,140 @@ public class DensityTerrain : MonoBehaviour
             Mathf.Max(1, chunkCount.y),
             Mathf.Max(1, chunkCount.z)
         );
+    }
+
+    /// <summary>Terrain Local Space 位置 → 逻辑 Voxel 坐标。</summary>
+    public Vector3Int LocalToVoxel(Vector3 terrainLocalPosition)
+    {
+        return ChunkSpace.LocalToVoxel(terrainLocalPosition, EffectiveVoxelSize);
+    }
+
+    /// <summary>Terrain Local Space 位置 → 绝对 Chunk 坐标。</summary>
+    public Vector3Int LocalToChunkCoordinate(Vector3 terrainLocalPosition)
+    {
+        return ChunkSpace.LocalToChunk(
+            terrainLocalPosition,
+            EffectiveVoxelSize,
+            GetEffectiveChunkVoxelSize()
+        );
+    }
+
+    /// <summary>World Space 位置 → Terrain Local Space 位置。</summary>
+    public Vector3 WorldToLocalPosition(Vector3 worldPosition)
+    {
+        return transform.InverseTransformPoint(worldPosition);
+    }
+
+    /// <summary>World Space 位置 → Terrain Local Space 逻辑 Voxel 坐标。</summary>
+    public Vector3Int WorldToVoxel(Vector3 worldPosition)
+    {
+        return ChunkSpace.WorldToVoxel(
+            worldPosition,
+            transform,
+            EffectiveVoxelSize
+        );
+    }
+
+    /// <summary>World Space 位置 → 绝对 Chunk 坐标。</summary>
+    public Vector3Int WorldToChunkCoordinate(Vector3 worldPosition)
+    {
+        return ChunkSpace.WorldToChunk(
+            worldPosition,
+            transform,
+            EffectiveVoxelSize,
+            GetEffectiveChunkVoxelSize()
+        );
+    }
+
+    /// <summary>World Space 位置 → Chunk 内部 Local Voxel 坐标。</summary>
+    public Vector3Int WorldToLocalVoxel(Vector3 worldPosition)
+    {
+        return ChunkSpace.VoxelToLocal(
+            WorldToVoxel(worldPosition),
+            GetEffectiveChunkVoxelSize()
+        );
+    }
+
+    /// <summary>World Space 位置 → 包含它的已生成 Chunk。</summary>
+    public bool TryGetChunk(Vector3 worldPosition, out TerrainChunk chunk)
+    {
+        return TryGetChunk(WorldToChunkCoordinate(worldPosition), out chunk);
+    }
+
+    /// <summary>绝对 Chunk 坐标 → 已生成 Chunk。</summary>
+    public bool TryGetChunk(Vector3Int chunkCoordinate, out TerrainChunk chunk)
+    {
+        if (chunkLookup.TryGetValue(chunkCoordinate, out ChunkEntry entry)
+            && entry.Chunk != null)
+        {
+            chunk = entry.Chunk;
+            return true;
+        }
+
+        chunk = null;
+        return false;
+    }
+
+    /// <summary>绝对 Chunk 坐标 → Chunk 原点在世界空间中的位置。</summary>
+    public Vector3 GetChunkWorldOrigin(Vector3Int chunkCoordinate)
+    {
+        return ChunkSpace.ChunkToWorldOrigin(
+            chunkCoordinate,
+            transform,
+            EffectiveVoxelSize,
+            GetEffectiveChunkVoxelSize()
+        );
+    }
+
+    /// <summary>
+    /// 收集与 Terrain Local Space bounds 相交或接触的所有已生成 Chunk。
+    /// 使用保守的 AABB 接触规则；结果追加到 results。
+    /// </summary>
+    public int CollectChunksIntersectingLocalBounds(
+        Bounds localBounds,
+        List<TerrainChunk> results)
+    {
+        int count = 0;
+
+        for (int i = 0; i < chunks.Count; i++)
+        {
+            ChunkEntry entry = chunks[i];
+            if (entry.Chunk == null) continue;
+
+            if (!IntersectsOrTouches(localBounds, entry.Chunk.LocalBounds))
+            {
+                continue;
+            }
+
+            if (results != null)
+            {
+                results.Add(entry.Chunk);
+            }
+
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Debug / Programmatic Mining V1 入口。
+    /// localCenter / size 使用 Terrain Local Space；size 是完整尺寸。
+    /// 实际修改由 TerrainMining 完成，Mesh 更新复用现有 Dirty / Rebuild。
+    /// </summary>
+    public int MineCubeLocal(
+        Vector3 localCenter,
+        Vector3 size,
+        bool rebuild = true)
+    {
+        return TerrainMining.MineCube(this, localCenter, size, rebuild);
+    }
+
+    private static bool IntersectsOrTouches(Bounds a, Bounds b)
+    {
+        return a.min.x <= b.max.x && a.max.x >= b.min.x
+            && a.min.y <= b.max.y && a.max.y >= b.min.y
+            && a.min.z <= b.max.z && a.max.z >= b.min.z;
     }
 
     private void ApplyDebugCutaway(DensityField densityField)
@@ -501,13 +837,15 @@ public class DensityTerrain : MonoBehaviour
                 $"Triangle Index Count = {subMesh1IndexCount}\n\n" +
                 "SubMesh 2:\n" +
                 $"Triangle Index Count = {subMesh2IndexCount}\n\n" +
-                "Bounds:\n" +
+                "Chunk Local Bounds:\n" +
                 $"center = {bounds.center}\n" +
                 $"size = {bounds.size}\n" +
                 $"min = {bounds.min}\n" +
                 $"max = {bounds.max}\n\n" +
-                $"Vertex Min = {vertexMin}\n" +
-                $"Vertex Max = {vertexMax}\n\n" +
+                $"Chunk Origin (Terrain Local) = {entry.Chunk.ChunkOrigin}\n" +
+                $"Chunk World Origin = {entry.Chunk.GetWorldOrigin(transform)}\n\n" +
+                $"Vertex Min (Chunk Local) = {vertexMin}\n" +
+                $"Vertex Max (Chunk Local) = {vertexMax}\n\n" +
                 $"MeshFilter.sharedMesh == chunk.Mesh = {filterMatches}\n\n" +
                 $"MeshRenderer.enabled = {(entry.MeshRenderer != null ? entry.MeshRenderer.enabled.ToString() : "meshRenderer null")}\n\n" +
                 $"Shared Materials Count = {(materials != null ? materials.Length : 0)}\n" +
@@ -599,8 +937,8 @@ public class DensityTerrain : MonoBehaviour
             for (int z = 0; z < a.Density.SampleCountZ; z++)
             {
                 CompareBoundarySample(
-                    a.Density.GetWorldPosition(ax, y, z),
-                    b.Density.GetWorldPosition(0, y, z),
+                    a.Density.GetLocalPosition(ax, y, z),
+                    b.Density.GetLocalPosition(0, y, z),
                     a.Density[ax, y, z],
                     b.Density[0, y, z],
                     a.Material[ax, y, z],
@@ -629,8 +967,8 @@ public class DensityTerrain : MonoBehaviour
             for (int z = 0; z < a.Density.SampleCountZ; z++)
             {
                 CompareBoundarySample(
-                    a.Density.GetWorldPosition(x, ay, z),
-                    b.Density.GetWorldPosition(x, 0, z),
+                    a.Density.GetLocalPosition(x, ay, z),
+                    b.Density.GetLocalPosition(x, 0, z),
                     a.Density[x, ay, z],
                     b.Density[x, 0, z],
                     a.Material[x, ay, z],
@@ -659,8 +997,8 @@ public class DensityTerrain : MonoBehaviour
             for (int y = 0; y < a.Density.SampleCountY; y++)
             {
                 CompareBoundarySample(
-                    a.Density.GetWorldPosition(x, y, az),
-                    b.Density.GetWorldPosition(x, y, 0),
+                    a.Density.GetLocalPosition(x, y, az),
+                    b.Density.GetLocalPosition(x, y, 0),
                     a.Density[x, y, az],
                     b.Density[x, y, 0],
                     a.Material[x, y, az],
@@ -675,8 +1013,8 @@ public class DensityTerrain : MonoBehaviour
     }
 
     private void CompareBoundarySample(
-        Vector3 worldA,
-        Vector3 worldB,
+        Vector3 localA,
+        Vector3 localB,
         float densityA,
         float densityB,
         MaterialType materialA,
@@ -688,7 +1026,7 @@ public class DensityTerrain : MonoBehaviour
     {
         pairs++;
 
-        if (Vector3.Distance(worldA, worldB) > 0.001f)
+        if (Vector3.Distance(localA, localB) > 0.001f)
         {
             positionMismatches++;
         }
@@ -724,7 +1062,7 @@ public class DensityTerrain : MonoBehaviour
             if (materialField == null) continue;
 
             Vector3 center = materialField.Origin + materialField.Size * 0.5f;
-            LogMaterialAtWorldPoint(materialField, center, $"Chunk {entry.Chunk.Coordinate} Center");
+            LogMaterialAtLocalPoint(materialField, center, $"Chunk {entry.Chunk.Coordinate} Center");
 
             float step = Mathf.Max(1f, materialField.Size.y / 8f);
             for (float y = materialField.Origin.y + materialField.Size.y;
@@ -732,7 +1070,7 @@ public class DensityTerrain : MonoBehaviour
                  y -= step)
             {
                 Vector3 point = new Vector3(center.x, y, center.z);
-                LogMaterialAtWorldPoint(materialField, point, $"Chunk {entry.Chunk.Coordinate} Column");
+                LogMaterialAtLocalPoint(materialField, point, $"Chunk {entry.Chunk.Coordinate} Column");
             }
         }
     }
@@ -773,31 +1111,31 @@ public class DensityTerrain : MonoBehaviour
         Debug.Log($"[MaterialField AllChunks] Air={air}, Grass={grass}, Dirt={dirt}, Stone={stone}");
     }
 
-    private void LogMaterialAtWorldPoint(
+    private void LogMaterialAtLocalPoint(
         MaterialField materialField,
-        Vector3 world,
+        Vector3 terrainLocalPosition,
         string label)
     {
         int x = Mathf.Clamp(
-            Mathf.RoundToInt((world.x - materialField.Origin.x) / materialField.CellSizeX),
+            Mathf.RoundToInt((terrainLocalPosition.x - materialField.Origin.x) / materialField.CellSizeX),
             0,
             materialField.SampleCountX - 1
         );
 
         int y = Mathf.Clamp(
-            Mathf.RoundToInt((world.y - materialField.Origin.y) / materialField.CellSizeY),
+            Mathf.RoundToInt((terrainLocalPosition.y - materialField.Origin.y) / materialField.CellSizeY),
             0,
             materialField.SampleCountY - 1
         );
 
         int z = Mathf.Clamp(
-            Mathf.RoundToInt((world.z - materialField.Origin.z) / materialField.CellSizeZ),
+            Mathf.RoundToInt((terrainLocalPosition.z - materialField.Origin.z) / materialField.CellSizeZ),
             0,
             materialField.SampleCountZ - 1
         );
 
         Debug.Log(
-            $"[MaterialField] {label} world={world} index=({x},{y},{z}) material={materialField[x, y, z]}"
+            $"[MaterialField] {label} local={terrainLocalPosition} index=({x},{y},{z}) material={materialField[x, y, z]}"
         );
     }
 

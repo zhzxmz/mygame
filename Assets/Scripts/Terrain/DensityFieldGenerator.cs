@@ -23,7 +23,7 @@ public static class DensityFieldGenerator
         float height,
         float noiseScale,
         float noiseStrength,
-        Vector3 cavityCenterOffset,
+        Vector3 cavityCenter,
         float cavityRadius,
         float grassDepth,
         float dirtDepth,
@@ -63,7 +63,7 @@ public static class DensityFieldGenerator
                     height,
                     noiseScale,
                     noiseStrength,
-                    cavityCenterOffset,
+                    cavityCenter,
                     cavityRadius
                 );
                 break;
@@ -117,16 +117,16 @@ public static class DensityFieldGenerator
             {
                 for (int z = 0; z < field.SampleCountZ; z++)
                 {
-                    Vector3 world = field.GetWorldPosition(x, y, z);
+                    Vector3 local = field.GetLocalPosition(x, y, z);
                     float surface = ComputeSurfaceHeight(
-                        world,
+                        local,
                         useNoise,
                         height,
                         noiseScale,
                         noiseStrength
                     );
 
-                    field[x, y, z] = surface - world.y;
+                    field[x, y, z] = surface - local.y;
                 }
             }
         }
@@ -150,12 +150,12 @@ public static class DensityFieldGenerator
             {
                 for (int z = 0; z < field.SampleCountZ; z++)
                 {
-                    Vector3 world = field.GetWorldPosition(x, y, z);
+                    Vector3 local = field.GetLocalPosition(x, y, z);
 
                     float noise = Sample3DValueNoise(
-                        world.x * frequency,
-                        world.y * frequency,
-                        world.z * frequency
+                        local.x * frequency,
+                        local.y * frequency,
+                        local.z * frequency
                     );
 
                     // value noise 为 0..1，映射到 -amplitude..amplitude。
@@ -167,6 +167,7 @@ public static class DensityFieldGenerator
 
     /// <summary>
     /// Debug/Test 模式：在高度场地形内部挖一个球形空洞。
+    /// cavityCenter 是 Terrain Local Space 中的绝对球心，不随 Chunk 划分重复。
     /// density = min(地形密度, 到球心的距离 - 半径)。
     /// 球内 distance - radius &lt; 0，会把实体强制变成空气。
     /// </summary>
@@ -176,10 +177,9 @@ public static class DensityFieldGenerator
         float height,
         float noiseScale,
         float noiseStrength,
-        Vector3 cavityCenterOffset,
+        Vector3 cavityCenter,
         float cavityRadius)
     {
-        Vector3 cavityCenter = field.Origin + cavityCenterOffset;
         float radius = Mathf.Max(0f, cavityRadius);
 
         for (int x = 0; x < field.SampleCountX; x++)
@@ -188,18 +188,18 @@ public static class DensityFieldGenerator
             {
                 for (int z = 0; z < field.SampleCountZ; z++)
                 {
-                    Vector3 world = field.GetWorldPosition(x, y, z);
+                    Vector3 local = field.GetLocalPosition(x, y, z);
 
                     float surface = ComputeSurfaceHeight(
-                        world,
+                        local,
                         useNoise,
                         height,
                         noiseScale,
                         noiseStrength
                     );
 
-                    float terrainDensity = surface - world.y;
-                    float cavityDensity = Vector3.Distance(world, cavityCenter) - radius;
+                    float terrainDensity = surface - local.y;
+                    float cavityDensity = Vector3.Distance(local, cavityCenter) - radius;
 
                     field[x, y, z] = Mathf.Min(terrainDensity, cavityDensity);
                 }
@@ -211,6 +211,8 @@ public static class DensityFieldGenerator
     /// HeightField v2 材料生成：
     /// Stone -> Weathering -> Initial Dirt -> Slope Retention -> Gravity Deposition -> Final Dirt -> Grass。
     /// 只修改 MaterialField，不修改 DensityField。
+    /// 已知 V2 限制：本 pass 目前只读取当前 Chunk 的 DensityField，坡度/重力沉积不跨 Chunk；
+    /// 因此多 Chunk 时 Material 结果可能仍依赖 Chunk 划分，本轮暂不重写此算法。
     /// </summary>
     private static void FillHeightFieldMaterialV2(
         DensityField densityField,
@@ -280,8 +282,8 @@ public static class DensityFieldGenerator
 
                 for (int y = 0; y < densityField.SampleCountY; y++)
                 {
-                    float worldY = densityField.Origin.y + y * densityField.CellSizeY;
-                    float depth = surface - worldY;
+                    float localY = densityField.Origin.y + y * densityField.CellSizeY;
+                    float depth = surface - localY;
 
                     if (depth <= 0f) continue;
                     if (depth > exposureDepth) continue;
@@ -377,8 +379,8 @@ public static class DensityFieldGenerator
                         continue;
                     }
 
-                    float worldY = densityField.Origin.y + y * densityField.CellSizeY;
-                    float depth = surface - worldY;
+                    float localY = densityField.Origin.y + y * densityField.CellSizeY;
+                    float depth = surface - localY;
                     if (depth < 0f) depth = 0f;
 
                     if (depth <= grassThickness)
@@ -452,7 +454,7 @@ public static class DensityFieldGenerator
 
                     if (mode == DensityGenerationMode.HeightField)
                     {
-                        // HeightField 下 density = surfaceHeight - worldY，可直接作为地表以下深度。
+                        // HeightField 下 density = surfaceHeight - localY，可直接作为地表以下深度。
                         float depth = density;
 
                         if (depth <= grass)
@@ -479,7 +481,7 @@ public static class DensityFieldGenerator
     }
 
     private static float ComputeSurfaceHeight(
-        Vector3 world,
+        Vector3 terrainLocalPosition,
         bool useNoise,
         float height,
         float noiseScale,
@@ -491,8 +493,8 @@ public static class DensityFieldGenerator
         if (useNoise && strength > 0f)
         {
             float noise = Mathf.PerlinNoise(
-                world.x * noiseScale,
-                world.z * noiseScale
+                terrainLocalPosition.x * noiseScale,
+                terrainLocalPosition.z * noiseScale
             ) * 2f - 1f;
 
             surface += noise * strength;

@@ -47,6 +47,10 @@ public static class TerrainMeshGenerator
         return Generate(field, null, isoLevel);
     }
 
+    /// <summary>
+    /// 根据 DensityField / MaterialField 生成 Chunk-local Terrain Mesh。
+    /// 顶点相对于 DensityField.Origin（Chunk 在 Terrain Local Space 中的原点）。
+    /// </summary>
     public static Mesh Generate(
         DensityField field,
         MaterialField materialField,
@@ -91,7 +95,10 @@ public static class TerrainMeshGenerator
 
                         float density = field[sx, sy, sz];
                         cornerDensities[c] = density;
-                        cornerPositions[c] = field.GetWorldPosition(sx, sy, sz);
+
+                        // Mesh 使用 Chunk Local Space：
+                        // DensityField 的 Origin 是 Chunk 在 Terrain Local Space 中的原点。
+                        cornerPositions[c] = field.GetChunkLocalPosition(sx, sy, sz);
 
                         if (materialField != null)
                         {

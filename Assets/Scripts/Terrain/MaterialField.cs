@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 三维材料场数据。
+/// 三维材料场数据（Terrain Local Space）。
 /// 只保存每个采样位置对应的 MaterialType，不生成 Mesh，也不生成地形。
 /// 空间信息（Origin / Size / Resolution / SampleCount / CellSize）与 DensityField 保持对齐。
 /// </summary>
@@ -9,7 +9,10 @@ public class MaterialField
 {
     private readonly MaterialType[,,] materials;
 
+    /// <summary>采样区域原点，位于 Terrain Local Space。</summary>
     public Vector3 Origin { get; private set; }
+
+    /// <summary>采样区域尺寸，位于 Terrain Local Space。</summary>
     public Vector3 Size { get; private set; }
 
     public int ResolutionX { get; private set; }
@@ -59,9 +62,20 @@ public class MaterialField
         set { materials[x, y, z] = value; }
     }
 
-    public Vector3 GetWorldPosition(int x, int y, int z)
+    /// <summary>采样点索引 → 该采样点的 Terrain Local Space 位置。</summary>
+    public Vector3 GetLocalPosition(int x, int y, int z)
     {
         return Origin + new Vector3(
+            x * CellSizeX,
+            y * CellSizeY,
+            z * CellSizeZ
+        );
+    }
+
+    /// <summary>采样点索引 → 相对于 Chunk 原点的 Chunk Local Space 位置。</summary>
+    public Vector3 GetChunkLocalPosition(int x, int y, int z)
+    {
+        return new Vector3(
             x * CellSizeX,
             y * CellSizeY,
             z * CellSizeZ

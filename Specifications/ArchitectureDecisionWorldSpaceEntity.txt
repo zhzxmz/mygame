@@ -1,0 +1,65 @@
+# Architecture Decision 001 — World / Space / Entity
+
+## 决策
+
+World 表示游戏世界整体。
+
+Space 表示 World 中用于描述空间位置、空间结构和空间状态的领域。
+
+Entity 表示存在于 World 中、具有自身状态并能够在空间中定位的对象。
+
+Space 与 Entity 是 World 下相互独立的概念。
+
+Entity 不属于 Chunk 的所有权体系，而是通过空间位置与 Space 建立关系。
+
+Chunk 是 Space 的空间分区与管理单位。
+
+Chunk 不等同于 Terrain，也不负责 Entity 自身的行为逻辑。
+
+## 空间结构
+
+World
+├── Space
+│   └── Chunk
+│       └── Spatial Data
+│
+└── Entity
+    └── Spatial Position
+
+Entity 通过 Position 定位到 Space 中的某个位置，并可以根据位置确定其所在 Chunk。
+
+## Terrain
+
+Terrain 属于 Space 的空间数据，而不是 Chunk 本身。
+
+Chunk 可以包含或管理局部 Terrain / Density / Material 等空间数据。
+
+Terrain 的具体表现形式（Mesh、Collider 等）不属于 World 的基础数据本身。
+
+## 表现层
+
+World / Space 的数据可以被进一步转换为：
+
+Spatial Data
+    ↓
+Mesh
+Collider
+Rendering
+Physics Query
+Other Representations
+
+Mesh 不作为 World 的权威数据来源。
+
+## 设计意图
+
+参考 Minecraft 等成熟体素世界对 World / Chunk / Entity 的基本关系，但不直接复制其具体实现。
+
+本项目允许使用不同的 Terrain 表示方式，例如 Density Field、Voxel、Material Data 等。
+
+Chunk 的主要职责是空间分区和局部数据管理，而不是成为所有游戏系统的容器。
+
+## 当前阶段
+
+当前仅确定概念关系。
+
+具体的 Chunk 数据结构、坐标规则、生成方式、加载策略等由 Chunk Specification 单独定义。

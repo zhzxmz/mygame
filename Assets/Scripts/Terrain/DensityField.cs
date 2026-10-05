@@ -1,15 +1,19 @@
 using UnityEngine;
 
 /// <summary>
-/// 三维密度场数据。
+/// 三维密度场数据（Terrain Local Space）。
 /// Density > isoLevel 表示实体，Density < isoLevel 表示空气，边界在等值面上。
 /// 这个类是地形源数据；Unity Mesh 只是它的可视化结果。
+/// Density Sample 是采样点，不等于逻辑 Voxel；Resolution / CellSize 只描述采样精度。
 /// </summary>
 public class DensityField
 {
     private readonly float[,,] densities;
 
+    /// <summary>采样区域原点，位于 Terrain Local Space。</summary>
     public Vector3 Origin { get; private set; }
+
+    /// <summary>采样区域尺寸，位于 Terrain Local Space。</summary>
     public Vector3 Size { get; private set; }
 
     /// <summary>每个轴上的单元格数量。</summary>
@@ -61,9 +65,20 @@ public class DensityField
         set { densities[x, y, z] = value; }
     }
 
-    public Vector3 GetWorldPosition(int x, int y, int z)
+    /// <summary>采样点索引 → 该采样点的 Terrain Local Space 位置。</summary>
+    public Vector3 GetLocalPosition(int x, int y, int z)
     {
         return Origin + new Vector3(
+            x * CellSizeX,
+            y * CellSizeY,
+            z * CellSizeZ
+        );
+    }
+
+    /// <summary>采样点索引 → 相对于 Chunk 原点的 Chunk Local Space 位置。</summary>
+    public Vector3 GetChunkLocalPosition(int x, int y, int z)
+    {
+        return new Vector3(
             x * CellSizeX,
             y * CellSizeY,
             z * CellSizeZ
