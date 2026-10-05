@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 56f7f7ccdaec643418f66f1bf2280a0c, type: 3}
   m_Name: New Buff Data
   m_EditorClassIdentifier: 
-  buffName: 
-  attackBonus: 0
+  buffName: yes
+  attackBonus: 50
   defenseBonus: 0
   maxHPBonus: 0

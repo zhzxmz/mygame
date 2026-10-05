@@ -21,3 +21,4 @@ MonoBehaviour:
   attackBonus: 100
   defenseBonus: 0
   maxHPBonus: 0
+  equippedBuff: {fileID: 11400000, guid: a2faf030b6509fd4e946c70d147fef2b, type: 2}
