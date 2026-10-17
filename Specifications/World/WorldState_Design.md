@@ -23,9 +23,8 @@
 > **具体地质规则（层/洞/矿/群系接口）**以 `WorldGeneration_Geology*.md` 为准；
 > **调度**以 `VoxelWorld_Runtime*.md` 为准；**环境参数与力量（魔力/圣/腐化）的规则**以本文档为准。
 >
-> **零修改前提（硬性）**：本文档的所有内容都必须能在**不修改** VoxelCore、WorldGeneration 既有实现、
-> 地质层 9 个实现文件、Mesh、View、Runtime Core、Streaming、Bootstrap 的前提下落地为**新增层 / 新增文件**。
-> 任何"必须改 VoxelType、必须改 VoxelCore、必须改被冻结的地质实现"的世界状态想法，一律不得进入 V1。
+> **兼容性目标（硬性，但不是永久禁改规则）**：WorldState 应通过明确的数据契约与既有系统协作，优先避免不必要地改写 VoxelCore、WorldGeneration、Geology、Mesh、View、Runtime Core、Streaming 与 Bootstrap。原始方案优先采用增量接入；若实现或修复确实需要触及既有代码，必须说明架构理由、兼容影响与回归验证。
+> 不得以 WorldState 为由绕过 VoxelType、VoxelCore、地形真值与因果依赖等已批准的架构边界；必要的跨系统变更须显式审查，而非一概禁止。
 >
 > **V1 状态**：本文档定义环境参数与世界状态的设计规则，不直接实现代码或生成世界数据。运行时接线状态应查看 `Specifications/World/WorldParameter_Source_Contract.md` 的实现对应表及当前代码。
 
@@ -717,9 +716,7 @@ Biome（离散标识）
 
 ## 附录 A：落地顺序与验收不变量（设计，不实现）
 
-> 本附录只是**未来的落地顺序设计**，本轮不实现任何一项。
-> 任何实现必须另立实现规范（例如 `WorldState_Implementation.md`），并在其中给出类型 / 接口 / 参数结构。
-> 本文档**不含任何代码与接口草案**。
+> 本附录记录原始的**建议落地顺序**，不代表当前实现状态，也不是永久禁止实现的规则。当前状态应以对应实现规范与代码核对为准；后续开发可按实际任务补充或更新实现规范。
 
 ### A.1 建议的落地顺序
 
