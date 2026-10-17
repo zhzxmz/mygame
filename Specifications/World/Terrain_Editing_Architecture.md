@@ -264,7 +264,7 @@ Mesh
 
 ---
 
-### 3.4.1 Voxel-Aware 几何的派生关系与 Region 粒度（当前实现）
+### Voxel-Aware Geometry Derivation and Region Granularity (Current Implementation)
 
 ```text
 VoxelField            = 唯一 Mutable Edit State
