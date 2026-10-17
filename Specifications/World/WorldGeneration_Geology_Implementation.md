@@ -495,12 +495,11 @@ public sealed class GeologyWorldGenerator : IWorldGenerator
 3. Stage D 之后：`GeologyWorldGenerator` 必须能直接被 `VoxelRuntimeCore` 使用
    （因为只实现 `IWorldGenerator`，Core 无需任何改动）—— 可用"用新生成器跑一遍 Runtime Core 闭环"验证。
 
-### 13.3 接入 Runtime 的前提与方式（后续步骤，本轮不做）
+### 13.3 接入 Runtime 的前提与方式（接线状态须按当前代码核对）
 
 * **前提**：Stage D 完成且 GIV1–GIV9 全绿；
-* **方式**：只在组装点替换 `new BasicTerrainGenerator(...)` → `new GeologyWorldGenerator(...)`；
-  或在玩法层显式选择（两者都只改**新增/组装点**代码）；
-* **禁止**：为了让新生成器接入而修改 Runtime Core / Streaming / Bootstrap 的**既有逻辑**
+* **方式**：在组装点显式选择 `BasicTerrainGenerator` 或 `GeologyWorldGenerator`；优先保持 `IWorldGenerator` 抽象兼容。具体组装点与接线状态必须以当前代码为准；
+* **兼容边界**：不应为了接入而无必要地改动 Runtime Core / Streaming / Bootstrap；若当前接线确实需要改动，必须说明原因、影响与回归验证，不将原始增量方案解释为永久禁改规则。**既有逻辑**
   （若发现必须修改，说明本规范设计出错，应先改本规范）；
 * **V1 默认**：仍使用 `BasicTerrainGenerator`（不替换旧实现）。
 
