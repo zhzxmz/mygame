@@ -20,8 +20,7 @@
 > **RegionModifier 的写入与叠加**以 `Region_Architecture_Contract.md` 为准；**查询语义**以 `WorldQuery_Design.md` 为准；
 > **本契约负责**：`Base` 与 `Modifier` 的**求值边界与顺序**、**层间贡献关系**、**Generation/Runtime 分离**、**真值来源映射**、**玩家修改隔离**。
 >
-> **零修改声明**：本文档是**声明性文档**，不产生任何运行时效果；开启/关闭本文档**不得改变任何体素输出**（`WSV19`）。
-> 与既有规范的措辞差异一律在**附录 D 登记**，**不修改**任何既有文件。
+> **声明性规则**：本文档本身不产生运行时效果，文档存在与否不应改变任何体素输出（`WSV19`）。附录 D 用于追踪需要协调的差异；确认冲突后，应修订拥有相应规则的权威文件并同步引用。
 
 ---
 
@@ -415,7 +414,7 @@ FinalState
 | # | 不变量 | 验证方法 |
 |---|---|---|
 | **WSV19** | **声明性**：开启/关闭本文档 ⇒ 体素输出逐体素一致（差异 = 0） | 两态体素快照比较 |
-| **WSV20** | **零修改 / 无新增**：既有实现与既有规范 SHA 不变；不新增参数；不新增 `VoxelType`（`WSC2`/`WSC3`） | 文件哈希比对 + 参数集合比对 |
+| **WSV20** | **兼容性 / 无未批准新增**：不新增未批准参数或 `VoxelType`；若任务未授权修改既有实现则 SHA 应不变，若明确授权修改则更新基线并验证受影响的不变量 | 参数集合比对 + 按任务范围进行文件哈希与回归检查 |
 | **WSV21** | **退化兼容**：不存在 Region / 关闭新层时，世界与既有基线逐体素一致（`WSC22`；`WS11`；`RA104`） | 与既有基线对照（体素快照 + 内容哈希） |
 
 ---
@@ -450,7 +449,7 @@ FinalState
 | # | 禁令 |
 |---|---|
 | **WSC94** | 不创建任何代码结构（class/interface/struct） |
-| **WSC95** | 不修改任何已有规范文件与任何 `Assets` 文件 |
+| **WSC95（范围说明）** | 本契约只定义求值边界，不直接实现代码；原始起草任务中的“不修改规范/Assets”不构成永久限制。若为满足已批准契约而需修改实现，应按明确任务范围分析影响并执行回归验证 |
 | **WSC96** | 不新增参数、不新增 `VoxelType`、不改 VoxelCore 与地质实现 |
 | **WSC97** | 不新增因果边、不改变因果方向（`WSC4`） |
 | **WSC98** | 不允许任何下游系统获得参数的写权限（§5.4） |
@@ -537,14 +536,14 @@ Seed（配置）
 
 ## 附录 D：与既有规范的对齐登记与变更规则
 
-### D.1 登记项（**本文档不修改任何既有文件**）
+### D.1 登记项（差异追踪与协调规则）
 
 | # | 需对齐内容 | 位置 | 真相（按本契约） |
 |---|---|---|---|
 | ① | `Fertility` 由 `SoilDepth` / `Moisture` / `Temperature` 派生 | `WorldState_Design.md`:95 | **`SoilDepth` 必须理解为配置级**（`WorldGenerationSettings.SoilDepth`，默认 `3`，见 `WorldGenerationSettings.cs:29`）；**禁止**读取 Geology 的层分类结论（Surface/Depth/Deep）——否则构成 Phase 4 前向读取 Phase 6 产物（`WSC26`/`WSC27`） |
 | ② | 同一行未指明 `Temperature`/`Moisture` 的"级别" | `WorldState_Design.md`:95 | 冻结为 **Base 级**（`WSC17`）：`Base.Fertility = f(配置级 SoilDepth, Base.T, Base.M)`；理由：无环、可分解、可独立验证 |
 | ③ | 查询真值语义（审查 **P0-4**：`Pristine` 与 `Current` 未区分） | `WorldGeneration_Architecture_Audit.md`:202/272；`WorldQuery_Design.md`:107/46 | **参数侧**：只有一份真值（`Base + Modifier`），**无 `Current` 版本**（`WSC68`/`WSC69`）；**体素侧**：`Pristine`/`Current` 二分**仍然开放**（`AD-2`），归 `VoxelWorld`/`Mining`/`WorldQuery` 的后续决策 |
-| ④ | 量纲迁移（审查 **AD-3**：实现整数域 vs 契约 `[0,1]`） | `WorldParameter_Contract.md` §5.3 | 沿用其**边界映射**（`[-500,600]→[0,1]`、`[0,1000]→[0,1]`）；**不修改代码** |
+| ④ | 量纲迁移（审查 **AD-3**：实现整数域 vs 契约 `[0,1]`） | `WorldParameter_Contract.md` §5.3 | 沿用其**边界映射**（`[-500,600]→[0,1]`、`[0,1000]→[0,1]`）；当前条目只记录量纲映射；若实现与映射冲突，应在相应任务中按权威分工评估并修订，而不是把本条解释为永久禁改代码 |
 | ⑤ | `Elevation` 复用既有高度场 vs 保留域禁令（`PZ12`） | `WorldParameter_Contract.md`:400；`WorldState_Design.md`:94 | 复用高度场是**只读转发**（允许）；`PZ12` 禁止的是"**复用保留域作为新层的随机源**"，两者不冲突（`WSC49`） |
 | ⑥ | 审查 **M1**（WorldState 层落地顺序） | `WorldGeneration_Architecture_Audit.md`:450 | 本契约是 M1 的**求值契约依据**；M1 仍需 M0 的决策（`AD-1`–`AD-4`）后执行 |
 
