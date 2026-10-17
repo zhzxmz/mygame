@@ -1,6 +1,6 @@
 # WorldParameter Source Contract V1
 
-> **文档性质**：**来源边界契约规范（Source Boundary Contract）**。本文档冻结 **WorldParameter 各参数的来源边界**：每个参数**当前（Phase 1 已实现）来源**、**临时性质**、**未来替换方向**、**允许读取对象**与**禁止读取对象**。
+> **文档性质**：**来源边界契约规范（Source Boundary Contract）**。本文档冻结 **WorldParameter 各参数的来源边界**：每个参数的**当前实现来源**、**临时性质**、**未来替换方向**、**允许读取对象**与**禁止读取对象**。这里的“当前实现”必须以附录 C 的代码符号和实际实现为准，不表示所有已登记参数均已接入；“Phase 1”如出现在历史登记中，指参数系统早期实现里程碑，而非世界生成 Pipeline 的 Phase 1（World Skeleton Generation）。
 >
 > **维护说明**：本文档定义参数来源边界与依赖方向，不以历史任务的修改范围限制后续维护。文中“Phase 1 临时来源”指参数系统早期实现里程碑中的占位来源登记，不等同于 World Generation Pipeline 的 Phase 1（World Skeleton Generation）。
 >
