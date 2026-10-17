@@ -27,7 +27,9 @@
 > 地质层 9 个实现文件、Mesh、View、Runtime Core、Streaming、Bootstrap 的前提下落地为**新增层 / 新增文件**。
 > 任何"必须改 VoxelType、必须改 VoxelCore、必须改被冻结的地质实现"的世界状态想法，一律不得进入 V1。
 >
-> **V1 状态**：仅设计（§8）。本文档不产生任何代码、不生成任何世界数据、不改变任何既有实现的行为。
+> **V1 状态**：本文档定义环境参数与世界状态的设计规则，不直接实现代码或生成世界数据。运行时接线状态应查看 `Specifications/World/WorldParameter_Source_Contract.md` 的实现对应表及当前代码。
+
+> **架构冲突提醒（必须先处理）**：本文件的早期上游列表引用 `VoxelWorld_Core.md`，其中冻结了离散 `Air/Grass/Dirt/Stone` 类型；而 `WorldGeneration_Geology.md` 使用连续 `Density` / `Material` 规则。两套表示不能未经解释就同时作为同一地形实现的最高权威。涉及地形真值、材料表示或 Voxel 输出的实现任务，必须先核对当前地形代码和对应实现契约；不得仅凭本文件旧上游列表恢复离散类型假设。旧 `VoxelWorld_Architecture.md` 已标记为历史概念文档，当前地形高层架构入口为 `Specifications/World/Terrain_Editing_Architecture.md`。
 
 ---
 
