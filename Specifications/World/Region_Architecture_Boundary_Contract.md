@@ -2,7 +2,7 @@
 
 > **文档性质**：**边界契约规范（Boundary Contract）**。本文档冻结 **Region 作为 WorldParameter `Modifier` 来源**的边界：Region 的定位、输入、输出、`Base` / `Modifier` / `Final` 的三方归属、未来扩展边界与 **Legacy 隔离**。
 >
-> **仅创建 Markdown**；**不修改任何代码**；**不创建 `.cs`**；**不修改任何已有规范**；**不新增 Region 类型列表**；**不实现 Region 生成算法**；**不实现 Biome / Geology / Resource / Ecology**。
+> **维护说明**：本文档定义 Region 与 WorldParameter Modifier 的职责边界，不以历史任务的修改范围限制后续维护。Region 生成算法及各下游系统的实现状态，应以对应实现和专项契约为准。
 >
 > **本文档不是实现规范**。**不定义**：来源类别、阈值、衰减形状、上限值、采纳算法数值；**只定义边界**。
 >
