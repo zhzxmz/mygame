@@ -145,7 +145,7 @@
 | **PC23** | Region 的采纳必须遵守 `Region_Architecture_Contract.md` §4 的**六步流程**（准入 / 规范化 / 全序 / 上限 / 物化 / 只读发布） |
 | **PC24** | `RegionModifier` 的分量集合**恰好 6 个**（`Temperature`/`Moisture`/`Fertility`/`MagicDensity`/`HolyInfluence`/`CorruptionInfluence`）；不含 `Elevation`/`Ocean`/`Balance` |
 | **PC25** | 叠加必须满足**交换律**与"无放大反馈""无覆盖语义"（`RA63`/`RA66`；`RAV8`） |
-| **PC26** | **History 的接入方式（冻结）**：History 不在本契约的 Phase 编号内（见附录 D ①）；其产物以 **Region Source 候选 + `HistoryTags`（只读）** 的形式作为 Phase 3 的**输入** |
+| **PC26** | **History 的接入方式（冻结）**：History 不作为独立顶层 Phase 编号；它是 Contract Phase 2 中与 WorldState Base 并行的预备分支（概念阶段映射见 `WorldGeneration_Pipeline_Design.md` §2.0）。其产物以 **Region Source 候选 + `HistoryTags`（只读）** 的形式作为 Phase 3 的**输入** |
 
 ### Phase 4 — Biome Classification
 
@@ -528,7 +528,7 @@ Phase 8  Runtime Activation          → Runtime Entity / Interaction
 
 | # | 需对齐内容 | 位置 | 真相（按本契约） |
 |---|---|---|---|
-| ① | **History 阶段**：任务书给定的 Phase 列表（Phase 0–8）**不含 History**，而既有 `WorldGeneration_Pipeline_Design.md` §2.1 有 **Phase 2 = History Generation** | 任务书（本次指令）§2；`WorldGeneration_Pipeline_Design.md`:133；`WorldHistory_Design.md` §1.3/`PI1` | History 的**因果关系不变**（`History → Region Source 候选 → Region`）；在本契约中它作为 **Phase 3 的输入**出现（`PC26`）。**编号差异已登记，待按权威层级协调** |
+| ① | **History 阶段**：任务书给定的 Phase 列表（Phase 0–8）**不含 History**，而既有 `WorldGeneration_Pipeline_Design.md` §2.1 有 **Phase 2 = History Generation** | 任务书（本次指令）§2；`WorldGeneration_Pipeline_Design.md`:133；`WorldHistory_Design.md` §1.3/`PI1` | History 的**因果关系不变**（`WorldSkeleton → History → Region Source 候选 → Region`）；本契约不为 History 单设顶层 Phase，而将其作为 **Contract Phase 2 的独立预备分支**（与 WorldState Base 并行），产物由 Phase 3 消费（`PC26`）。概念阶段与执行阶段的对应关系见 `WorldGeneration_Pipeline_Design.md` §2.0 |
 | ② | **WorldState 与 Region 的先后**：任务书 §2/§3 把 **WorldState（Phase 2）写在 Region（Phase 3）之前**，而既有因果方向是 `Region → RegionModifier → WorldState FinalState` | 任务书 §2/§3；`WorldState_Design.md` §2.1；`RA75`/`RA76`；`WSC19`（`FinalState = clamp01(Base + RegionModifier)`） | **依赖方向优先**（`PC61`）：Phase 2 采用**两段式发布**（`PC19`）——`Base` 先定稿，`FinalState` 在 Phase 3 之后定稿；**因果方向未被改变**（Region 仍是 Modifier 的唯一写入者） |
 | ③ | **Phase 7 Mesh / Phase 8 Runtime**：既有 `Pipeline_Design` 的 Phase 集合到 **Phase 7 = Voxel Output** 为终点（Mesh/Runtime 不在管线内） | 任务书 §2；`WorldGeneration_Pipeline_Design.md`:138；`VoxelWorld_Mesh.md`（只读派生）；`VoxelWorld_Runtime*.md` | 本契约把 **Mesh Construction（P7）** 与 **Runtime Activation（P8）** 纳入调度契约，但保持其既有性质：**Mesh = 只读派生**（`PC39`）、**Runtime = 只调度不回写**（`PC43`） |
 | ④ | **Phase 6 Voxel Evaluation 与既有 Phase 7 Voxel Output** | 任务书 §2；`Pipeline_Design` §2.1 Phase 7；`GC50`（既有 `GeologyWorldGenerator.Generate` 返回 `VoxelChunk` 属 Phase 7 落地形态） | 同一件事的**改名与分层**：本契约的 Phase 6 承担"抽样 + 写入动作"，Geology（Phase 5）只提供判定（`PC35`） |
