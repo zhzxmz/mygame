@@ -1,5 +1,10 @@
 \# Voxel World Core Specification V1
 
+> **系统适用范围**：本文档只约束 `Assets/Scripts/VoxelWorld/` 下的离散 VoxelWorld 体系，包括 `VoxelChunk`、`VoxelType` 及其配套生成、运行时和网格流程。它不是整个游戏所有地形系统的全局定义。
+>
+> 仓库另有独立的 `DensityTerrain` 体系，使用 `DensityField` / `MaterialField` 与 Marching Cubes；其架构入口是 `Specifications/World/Terrain_Editing_Architecture.md`。两套系统目前是并存的不同实现，不得仅凭本文档推断 DensityTerrain 必须改为固定尺寸方块体素，也不得反向用 DensityTerrain 规则改写本体系的 `VoxelType` / `VoxelChunk` 契约。若任务要统一两套系统，必须先提出并批准专门的迁移方案。
+
+
 
 
 
