@@ -344,14 +344,14 @@ EnableBiomeModifiers = false（或 biomeProvider == null）
 | **GW6** | **Biome 影响有界**：开启群系后差异**只允许**出现在地表层 | 开/关 Biome 的两份输出比较：断言差异集合 ⊆ `{y == SurfaceHeight 的体素}`、差异只发生在 `{Grass ↔ Stone}` 之间、实体/空的分界完全不变（`IsSolid` 逐体素相同） |
 | **GW7** | **Biome 不生成实体** | 结构扫描：生成器与 Biome 相关源码不出现 `Tree`/`Plant`/`Animal`/`Vegetation`/`Entity`/`Prefab`/`Instantiate`/`GameObject`；运行期：多次生成后 GameObject 计数不变 |
 | **GW8** | **Generate 失败不污染世界** | ① 结构性：生成器**不持有** `VoxelWorld`、无世界写入路径 ⇒ 失败不可能污染世界；② 输出契约：多坐标 × 全量类型合法 + `Coordinate` 自洽 + 自检失败即抛异常；③ 端到端：引用 Runtime Core 的既有验证（生成失败 ⇒ 世界 `ChunkCount == 0`、记录 `Failed + NeedsReinstall`、之后可成功重试） |
-| **GW9** | **Runtime Core 无需修改**（无感替换） | ① `Runtime/*.cs` 与 `IWorldGenerator.cs` **SHA256 不变**；② 反射：`GeologyWorldGenerator` 实现 `IWorldGenerator`、`Settings` 属性类型为 `WorldGenerationSettings`；③ 端到端：用新生成器跑一次 Core 闭环（请求 → `Tick` → `Ready`）成功，且 Core 无任何改动 |
-| **GW10** | **`BasicTerrainGenerator` SHA 不变** + 既有入口全绿 + 结构纪律 | ① 文件哈希比对（含 `BasicTerrainGenerator` / `IWorldGenerator` / VoxelCore / Mesh / View / Runtime / Streaming / Bootstrap）；② 既有 8 个地质/核心入口由外部编排全 PASS；③ 目录扫描：无 UnityEngine / Chunk 坐标参与规则 / Runtime / Entity / 静态可变字段 |
+| **GW9** | **Runtime Core 兼容性**（优先无感替换） | ① 若当前任务未授权修改，则 `Runtime/*.cs` 与 `IWorldGenerator.cs` SHA256 不变；② 反射检查生成器契约；③ 端到端运行 Core 闭环（请求 → `Tick` → `Ready`）。如确需改 Core，必须作为显式跨系统变更说明原因、更新基线并执行回归 |
+| **GW10** | **基础生成器兼容性** + 既有入口回归 + 结构纪律 | ① 未授权修改时，比较 `BasicTerrainGenerator` / `IWorldGenerator` / VoxelCore / Mesh / View / Runtime / Streaming / Bootstrap 的哈希；若授权修改则更新基线并验证退化等价；② 运行既有地质/核心入口并报告真实结果；③ 目录扫描：无 UnityEngine / Chunk 坐标参与规则 / Runtime / Entity / 静态可变字段 |
 
 **验收通过条件**：GW1–GW10 全绿 + 既有 8 个入口全 PASS + 零未授权文件改动。
 
 ---
 
-## 附录 A：类型与构造草案（Stage D 落地依据）
+## 附录 A：原始类型与构造草案（历史参考；当前实现以代码为准）
 
 ```csharp
 namespace VoxelWorld.Generation.Geology
@@ -414,15 +414,16 @@ namespace VoxelWorld.Generation.Geology
 * §1.4：「不创建 Chunk」= 不创建**世界拥有的** Chunk（游离 Chunk 是 `IWorldGenerator` 契约的必需输出）；
 * §4.3：`Deposit` 一律不改变 Voxel；`Biome` **只在地表材料这一处**生效（取值限定在 V1 的 4 种体素状态内）。
 
-## 附录 C：落地清单与顺序（Stage D，本轮不执行）
+## 附录 C：原始落地清单与当前状态（不是待创建清单）
 
-| 步骤 | 内容 | 完成判据 |
+> 本表原本是实现前计划。静态核对日期：2026-10-17。此处只记录文件存在性；本轮没有运行 Unity 验证，因此不宣称 GW1–GW10 或端到端闭环通过。
+
+| 步骤 | 原计划内容 | 当前状态 |
 |---|---|---|
-| D-1 | 新增 `Assets/Scripts/VoxelWorld/Generation/Geology/GeologyWorldGenerator.cs`（本文档 §2–§6） | 编译通过；GW1–GW8 绿 |
-| D-2 | 新增 `Assets/Editor/GeologyStageDValidation.cs`（GW1–GW10） | 批处理 PASS |
-| D-3 | 跑既有 8 个入口 + 6 个经典入口 | 全部 PASS（GW9/GW10） |
-| D-4 | （可选、独立）组装点试验：把 `BasicTerrainGenerator` 换成 `GeologyWorldGenerator` 跑一次 Runtime 闭环 | Core 零修改、闭环到 `Ready` |
-| D-5 | （独立）Stage F：Bootstrp/玩法层显式选择新生成器 | 仅改组装点；V1 默认仍用旧实现 |
+| D-1 | 新增 `Assets/Scripts/VoxelWorld/Generation/Geology/GeologyWorldGenerator.cs` | **已存在**；构造参数与当前代码以该文件为准 |
+| D-2 | 新增 `Assets/Editor/GeologyStageDValidation.cs` | **已存在**；脚本包含 GW1–GW10 检查入口，但本轮未运行 |
+| D-3 | 运行既有地质/核心验证入口 | **本轮未执行**；通过状态须以最新日志为准 |
+| D-4 | 用新生成器跑 Runtime Core 闭环 | **尚未确认**；需检查真实组装点并运行验证 |
+| D-5 | 在 Bootstrap/玩法层选择生成器 | **尚未确认**；当前默认生成器以真实组装代码为准，不沿用原计划假设 |
 
-**Stage D 不得做**：修改 VoxelCore / `BasicTerrainGenerator` / `IWorldGenerator` / WorldGenerationSettings /
-HeightFunction / Runtime / Streaming / Mesh / View / Bootstrap；创建 Entity；新增 `VoxelType`。
+**兼容边界**：Geology 生成器必须继续只产出游离 `VoxelChunk`，不得越权安装/注册或生成 Entity；不新增未批准 `VoxelType`。优先保持 VoxelCore、基础生成器与 Runtime 抽象兼容。若集成或修复确实需要改动既有核心代码，必须说明原因、更新受影响基线并执行回归；原始增量接入方案不是永久禁改清单。
