@@ -4,6 +4,7 @@
 > **维护说明**：本文档定义 WorldParameter 状态的数据模型、访问方式、生命周期与权限。原始起草轮次的文件修改限制不构成当前维护限制；参数和 Voxel 类型仍须遵守其权威契约的变更流程。
 >
 > **本文档不是实现**。**不定义**：数值、阈值、生成算法、噪声公式；**只定义数据结构语义**。
+> **当前实现差距（静态代码核对，2026-10-17）**：`WorldParameterState` / `WorldParameterValue` 已承载 `BaseValue`、`Modifier`、`FinalValue`，但 `WorldParameterValue` 没有“Final 尚未定稿”的显式状态；`WorldParameterEvaluator.Evaluate` 在同一次调用中将 `Modifier=0` 并立即填入 `FinalValue`。这只是当前占位实现，不满足 `PMV11` 对 Phase 3 前未定稿状态的目标语义。后续实现必须解决此生命周期/表示缺口，不能把当前 `FinalValue` 当作 Region 合成后的正式值。
 >
 > **核心定位**：
 >
