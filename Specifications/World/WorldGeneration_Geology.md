@@ -3,6 +3,8 @@
 > 适用范围：`Assets/Scripts/VoxelWorld/Generation/`（世界规则层）及其未来的地质实现。
 > 本规范定义 **VoxelWorld 的连续世界地质规则**：一个坐标"为什么"是这种地形、这种材料、有没有洞、有没有矿。
 >
+> **表示层边界**：这里的“连续”指生成规则以世界坐标纯函数表达，并不意味着本规范直接生成 Marching Cubes 的连续 Density Mesh。此规范的接入目标仍是离散 `VoxelWorld`：采样结果最终分类为 `Air / Grass / Dirt / Stone` 并写入 `VoxelChunk`。它与 `DensityTerrain` 的 `DensityField` / `MaterialField` 体系是不同的实现路径；不可将二者的真值、编辑状态或 Mesh 契约混为一谈。
+>
 > **本文档只定义"世界是什么"，不定义"如何加载世界"。**
 > * Generation 决定：**某个坐标为什么是这个地形**（世界规则）；
 > * Runtime / Streaming 决定：**什么时候加载、加载哪些 Chunk**（调度）。
