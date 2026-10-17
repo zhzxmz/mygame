@@ -2,7 +2,7 @@
 
 > **文档性质**：**架构契约规范（Architecture Contract）**。本文档只定义 **Region 的数据契约与权限边界**：
 > 身份、候选输入、采纳（Resolution）、修正（Modifier）合成、类型边界、Chunk/Voxel 边界、查询关系、确定性、局部求值、消费者权限。
-> **仅创建 Markdown**；**不写代码**；**不创建 class / interface / struct**；**不修改任何已有规范**；**不修改 `Assets`**；**不新增 `VoxelType`**；**不改变已有因果方向**。
+> **维护说明**：本文档定义 Region 的数据契约、权限边界与因果方向。原始起草轮次的文件修改限制不构成当前维护限制；接口实现和代码修改仍须遵守本文冻结的职责、依赖与变更规则。
 >
 > **本文档要补全的缺环**（来自 `WorldGeneration_Architecture_Audit.md` **P0-3**）：
 >
