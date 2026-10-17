@@ -1,7 +1,7 @@
 # World Generation Geology Implementation Specification V1
 
 > **文档性质**：本文档是 `WorldGeneration_Geology.md`（地质**规则**层）的**接入层实现规范** ——
-> 把"世界规则"落到一个可插拔的 `IWorldGenerator` 实现上，且**不替换既有实现、不修改任何既有核心代码**。
+> 把"世界规则"落到一个可插拔的 `IWorldGenerator` 实现上，并以兼容既有生成契约为目标；本文档不把“新增实现”解释为永久禁止修复既有代码。涉及核心契约的变更必须显式分析兼容性、更新相关规范并执行回归验证。
 >
 > **文档性质**：本文档定义地质规则接入层的实现边界与验收要求；其中原始起草轮次的“本轮只写规范，不写代码”属于历史任务范围，不限制当前开发。具体代码是否已落地必须以当前实现和验证结果为准。
 > 下一阶段按 §13 的清单与顺序落地。
@@ -15,7 +15,7 @@
 > * `Specifications/ArchitectureDecisionWorldSpaceEntity.txt`（ADR-001）—— Voxel / Entity 边界。
 >
 > 冲突时的优先级：真值 > 生成契约 > 地质规则 > 调度 > 抽象 > **本文档（接入细化）**。
-> 本文档**只新增**：新增类型、新增文件、新增验证；不得要求修改任何既有文件。
+> 原始接入方案优先采用新增实现并保留 `BasicTerrainGenerator` 基线，但这不是禁止修改任何既有文件的永久规则。若后续修复或架构演进需要改动既有文件，必须明确变更原因、兼容影响与回归范围。
 
 ---
 
@@ -45,9 +45,9 @@ IWorldGenerator generator =
 * Runtime / Streaming / Mesh / View / VoxelCore / BasicTerrainGenerator / IWorldGenerator
   **一律零修改**（§1.3）。
 
-### 1.2 本轮范围（明确不做）
+### 1.2 原始规范编写轮次的范围（历史记录，不是当前开发限制）
 
-| 本轮做 | 本轮不做 |
+| 原始规范编写轮次完成的设计工作 | 当时未在该轮实现的内容（是否已实现须以当前代码为准） |
 |---|---|
 | 定义接入层的结构、类型、文件、不变量、验证设计（GIV1–GIV9） | **实现** `GeologyWorldGenerator` / `GeologySampler` / 噪声 / 验证入口 |
 | 定义参数结构与校验规则 | 实现 `TerrainGenerator` 本体（用户明确要求先不做） |
