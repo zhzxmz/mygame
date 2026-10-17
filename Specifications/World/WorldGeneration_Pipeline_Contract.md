@@ -124,12 +124,14 @@
 
 | 项 | 内容 |
 |---|---|
-| **Purpose** | 求值 8 个环境参数：`Base` 与 `FinalState` |
-| **Input** | Seed Context + WorldSkeleton + **RegionModifier（来自 Phase 3）** |
-| **Output** | **WorldParameter FinalState**（8 参数） |
-| **Allowed Read** | Seed Context、WorldSkeleton、显式参数配置、**RegionModifier**（只读） |
-| **Forbidden Read** | Biome / Geology / Voxel / Mesh / Runtime 的任何产物；玩家状态；体素真值 |
-| **Forbidden Write** | 除参数求值结果之外的一切（不得写 Region、不得写骨架、不得写体素） |
+| **Purpose** | 执行两条独立预备分支：求值 WorldState Base；准备 History 事实 |
+| **Input — WorldState Base** | Seed Context + WorldSkeleton + 显式参数配置 |
+| **Input — History Preparation** | Seed Context + WorldSkeleton + History 规则/配置 |
+| **Output** | WorldState 分支输出 **WorldParameterBase**；History 分支输出 **HistoryTags + Region Source 候选** |
+| **Allowed Read — WorldState Base** | Seed Context、WorldSkeleton、显式参数配置；**不得读取 History** |
+| **Allowed Read — History Preparation** | Seed Context、WorldSkeleton、History 规则/配置；**不得读取 WorldState、Region 或任何下游结论** |
+| **Forbidden Read** | 两条分支均不得读取尚未产生的 RegionModifier / FinalState、Biome / Geology / Voxel / Mesh / Runtime 产物、玩家状态或体素真值 |
+| **Forbidden Write** | WorldState 分支只产出 Base；History 分支只产出历史事实与 Region Source 候选；不得互相写入或改写上游 |
 
 | # | 规则 |
 |---|---|
@@ -148,6 +150,8 @@
 | **Allowed Read** | Seed Context、WorldSkeleton、**History 事实/`HistoryTags`（只读）**、显式 Region 参数、地形派生量（`Elevation`/`Ocean`，只读） |
 | **Forbidden Read** | WorldParameter FinalState（尚在定稿中）、Biome、Geology、Voxel、Mesh、Runtime、玩家状态、已生成内容 |
 | **Forbidden Write** | 除 Region Context（含 `RegionModifier`）之外的一切 |
+
+> **Phase 3 完成后的定稿门**：Region Context 发布完成后，由 WorldState 按 `PC19` 合成 `FinalState = clamp01(Base + RegionModifier)`，随后才能进入 Phase 4 Biome Classification。此定稿动作属于 WorldState 的合成职责，不代表 Region 可以写入 FinalState，也不新增独立编号 Phase。
 
 | # | 规则 |
 |---|---|
