@@ -2,7 +2,7 @@
 
 > **文档性质**：**求值契约规范（Evaluation Contract）**。本文档只定义 **WorldState 层的最终求值契约**：
 > `Base` 的来源边界、`Modifier` 合成、History / Region / Geology 的参数贡献关系、Generation State 与 Runtime State 的分离、Query 的真值来源、玩家修改隔离。
-> **仅创建 Markdown**；**不写代码**；**不创建 class / interface / struct**；**不修改 `Assets`**；**不修改任何已有规范**；**不新增参数**；**不新增 `VoxelType`**。
+> **维护说明**：本文档定义 WorldState 的求值与合成契约。上句所列的文件修改限制属于历史起草任务范围，不限制当前维护；参数集合与 Voxel 类型的变更仍须遵守本文及上游契约规定的正式变更流程。
 >
 > **必须兼容的上游规范**：
 >
