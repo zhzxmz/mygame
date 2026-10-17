@@ -7,8 +7,8 @@
 
 > **实现状态快照（2026-10-17，静态代码核对；不是运行测试结论）**：
 > * **WorldSkeleton**：`WorldSkeletonFacts.TryEvaluate` 已实现最小查询，但只转发既有高度场、由海平面派生 Ocean，并使用单大陆退化编号；完整大陆/掩码/基础气候带/`Slope` 生成尚未由该入口提供。
-> * **WorldState 参数求值**：`WorldParameterEvaluator` / `WorldParameterRules` 已存在；当前仍有占位来源：Elevation 域哈希、SeaLevel 固定值、Temperature/Moisture 域哈希、Fertility 使用 Temperature×Moisture，MagicDensity/HolyInfluence/CorruptionInfluence 基础值为 0。Region Modifier 在求值器中明确恒为 0，故 Region → FinalState 尚未接通。
-> * **History / Region / Biome**：相关设计规范与部分数据模型存在，但本次核对未确认它们已通过一个统一的 World Generation Pipeline 完整接线。存在数据类型不等于端到端生成已实现。
+> * **WorldState 参数求值**：`WorldParameterEvaluator` / `WorldParameterRules` 已存在；当前仍有占位来源：Elevation 域哈希、SeaLevel 固定值、Temperature/Moisture 域哈希、Fertility 使用 Temperature×Moisture，MagicDensity/HolyInfluence/CorruptionInfluence 基础值为 0。Region Modifier 在求值器中明确恒为 0，故 Region → FinalState 尚未接通。**额外契约缺口**：`Evaluate` 目前仍立即构造并返回含 `FinalValue` 的三态快照，且 `WorldParameterValue` 没有“Final 未定稿”标记；这与 PC19/PC21 的两段式发布目标尚未一致，不能把当前返回的 `FinalValue` 视为已完成 Region 合成后的正式值。
+> * **History / Region / Biome**：相关设计规范与部分数据模型存在，但本次核对未确认它们已通过一个统一的 World Generation Pipeline 完整接线。具体而言，`RegionPipeline.ResolveContext` 目前只调用占位 `RegionDetermination.Determine(seed, position)` 并装配固定占位字段；它不消费 `WorldSkeletonFacts`、不生成/采纳 `RegionSourceCandidate`，也不产出 `RegionModifier`。存在数据类型不等于端到端生成已实现。
 > * **Geology / Voxel / Runtime**：离散 `VoxelWorld` 中存在 `BasicTerrainGenerator`、`GeologySampler`、`GeologyWorldGenerator`、`VoxelChunk` 与 `VoxelRuntimeCore`。这是 `IWorldGenerator → VoxelChunk` 的离散生成路径，不代表高层 WorldState / History / Region / Biome 已接入该路径，也不代表 DensityTerrain 已接入。
 > * **DensityTerrain**：属于独立的 Density/Material + Marching Cubes 地形编辑体系，不由本契约的离散 Voxel Phase 6–8 自动覆盖。
 >
