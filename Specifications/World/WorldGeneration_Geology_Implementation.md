@@ -71,18 +71,20 @@ IWorldGenerator generator =
 | View（`VoxelChunkView` / `UnityMeshBuilder` / `ChunkViewPresenter`） | 表现层与地质无关 |
 | Bootstrap（`VoxelWorldStreamingBootstrap`） | 接入属后续步骤；本轮不碰 |
 
-### 1.4 交付物（下一阶段创建的文件清单）
+### 1.4 原始计划交付物与当前存在性核对
 
-| 文件（新增） | 类型 | 命名空间 |
-|---|---|---|
-| `Assets/Scripts/VoxelWorld/Generation/Geology/GeologySettings.cs` | `GeologySettings`（显式参数 + `IsValid`） | `VoxelWorld.Generation.Geology` |
-| `Assets/Scripts/VoxelWorld/Generation/Geology/GeologyNoise.cs` | 整数哈希值噪声（确定性；不改 `HeightFunction`） | `VoxelWorld.Generation.Geology` |
-| `Assets/Scripts/VoxelWorld/Generation/Geology/GeologySample.cs` | 采样结果 + 命中规则枚举（可解释性） | `VoxelWorld.Generation.Geology` |
-| `Assets/Scripts/VoxelWorld/Generation/Geology/GeologySampler.cs` | 世界坐标纯函数采样（Density/Material/Cave/Deposit/Biome） | `VoxelWorld.Generation.Geology` |
-| `Assets/Scripts/VoxelWorld/Generation/Geology/IDepositProvider.cs` | 矿藏查询接口（只读） | `VoxelWorld.Generation.Geology` |
-| `Assets/Scripts/VoxelWorld/Generation/Geology/IBiomeProvider.cs` | 群系接口（只读、只接口） | `VoxelWorld.Generation.Geology` |
-| `Assets/Scripts/VoxelWorld/Generation/Geology/GeologyWorldGenerator.cs` | `IWorldGenerator` 实现（接入层） | `VoxelWorld.Generation.Geology` |
-| `Assets/Editor/GeologyWorldGenerationValidation.cs` | 批处理验证（GIV1–GIV9 + 既有回归 + SHA） | — |
+> 下表原本是实现前的计划清单，不再表示“这些文件尚待创建”。截至 2026-10-17，以下 7 个 Geology 源文件均已在仓库中存在。验证脚本未在原计划路径 `Assets/Editor/GeologyWorldGenerationValidation.cs` 找到，因此其现状标为“未确认”，不能推断 GIV1–GIV9 已经通过当前验证。
+
+| 原计划文件 | 当前代码核对 | 原设计职责 | 命名空间 |
+|---|---|---|---|
+| `Assets/Scripts/VoxelWorld/Generation/Geology/GeologySettings.cs` | 已存在 | 显式参数与 `IsValid` | `VoxelWorld.Generation.Geology` |
+| `Assets/Scripts/VoxelWorld/Generation/Geology/GeologyNoise.cs` | 已存在 | 确定性整数哈希噪声 | `VoxelWorld.Generation.Geology` |
+| `Assets/Scripts/VoxelWorld/Generation/Geology/GeologySample.cs` | 已存在 | 采样结果与命中规则解释 | `VoxelWorld.Generation.Geology` |
+| `Assets/Scripts/VoxelWorld/Generation/Geology/GeologySampler.cs` | 已存在 | 世界坐标纯函数采样 | `VoxelWorld.Generation.Geology` |
+| `Assets/Scripts/VoxelWorld/Generation/Geology/IDepositProvider.cs` | 已存在 | 矿藏查询抽象 | `VoxelWorld.Generation.Geology` |
+| `Assets/Scripts/VoxelWorld/Generation/Geology/IBiomeProvider.cs` | 已存在 | 群系环境查询抽象 | `VoxelWorld.Generation.Geology` |
+| `Assets/Scripts/VoxelWorld/Generation/Geology/GeologyWorldGenerator.cs` | 已存在 | `IWorldGenerator` 的地质实现 | `VoxelWorld.Generation.Geology` |
+| `Assets/Editor/GeologyWorldGenerationValidation.cs` | 在原计划路径未找到，未确认 | 批处理验证与回归 | — |
 
 ---
 
@@ -505,17 +507,16 @@ public sealed class GeologyWorldGenerator : IWorldGenerator
 
 ---
 
-## 14. 明确不做与变更规则
+## 14. V1 范围与变更规则
 
-### 14.1 明确不做（本文档范围）
+### 14.1 V1 规则范围（不等于永久禁改清单）
 
-* `TerrainGenerator` 本体的实现（用户明确要求先不做）；
+* 本规范不定义另一个名为 `TerrainGenerator` 的独立生成器；若要新增该系统，须另行明确职责与契约；
 * 具体 Biome（森林/沙漠/雪原…）与任何植被生成；
 * 晶簇 / 矿石节点 / 掉落物等 Entity；
 * 树木 / 建筑 / 生物 / NPC / 文明；
 * 新增 `VoxelType`、新增几何/材质语义、新增存档格式；
-* 任何对既有文件（§1.3 清单）的修改；
-* 加载/卸载策略、Chunk 生命周期、Mesh/View 的任何改动。
+* 对 Runtime / Streaming / Mesh / View 的改动不属于本 Geology 规则层本身；如集成或修复确实需要，应在相应权威规范中评估并明确记录，而不是仅凭原始起草范围禁止改动。
 
 ### 14.2 变更规则
 
@@ -523,12 +524,14 @@ public sealed class GeologyWorldGenerator : IWorldGenerator
    （真值隔离、确定性、不覆盖改动、不要求修改 VoxelCore）；
 2. 任何触及 §11（GIV 不变量）、§12（结构纪律）、§1.3（禁止修改清单）的修改必须：
    ① 升版本号；② 同步更新验证入口；③ 说明与既有世界（同 Seed 同坐标结果）的兼容性；
-3. **禁止**用"地质需要"为理由修改 VoxelCore / 既有生成实现 / Runtime / Streaming / Mesh / View；
-4. 落地只能以**新增文件**的方式进行（§1.4 清单）。
+3. 不得以“地质需要”为理由绕过 VoxelCore、真值、确定性与单向依赖等架构边界；如果确需修改既有生成实现 / Runtime / Streaming / Mesh / View，必须作为明确的跨系统变更审查并补回归验证；
+4. 原始实现计划采用新增文件的增量方式，但这不是永久的“只能新增文件”限制。当前维护以代码事实与本节变更规则为准。
 
 ---
 
-## 附录 A：接口与类型草案（下一阶段落地依据）
+## 附录 A：原始接口与类型草案（历史参考，非当前实现权威）
+
+> 本附录保留原始设计时的类型草案，方便追溯契约来源；代码文件已经存在，后续 Agent 不应按本附录重新创建或盲目覆盖类型。实现细节以当前 `Assets/Scripts/VoxelWorld/Generation/Geology/` 代码为准；若草案与代码不一致，先做差异分析，再决定是否更新规范或代码。
 
 ```csharp
 namespace VoxelWorld.Generation.Geology
