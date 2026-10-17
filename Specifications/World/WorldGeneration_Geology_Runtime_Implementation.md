@@ -3,7 +3,7 @@
 > **文档性质**：本文档定义 **`GeologyWorldGenerator` 如何实现 `IWorldGenerator`** ——
 > 即 `WorldGeneration_Geology_Implementation.md` §13.1 的 **Stage D（接入层）** 实现规范。
 >
-> **本轮只写规范**：不创建 `GeologyWorldGenerator.cs`，不创建任何其它代码，不修改任何既有 `.cs`。
+> **维护说明**：本文档定义 `GeologyWorldGenerator` 的实现契约与边界。原始起草轮次的“不创建代码、不修改既有 `.cs`”属于历史任务范围，不限制当前维护；实际实现状态必须以仓库代码和验证结果为准。
 >
 > 上游规范：
 > * `Specifications/World/WorldGeneration_Geology.md` —— 地质**规则**层（P0–P3 优先级、地层、洞穴、矿藏、群系接口）；
