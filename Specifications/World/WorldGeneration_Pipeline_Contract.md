@@ -113,6 +113,12 @@
 
 ### Phase 2 — World Parameter Evaluation
 
+> **Phase 2 的双分支解释**：本编号阶段包含两条相互独立的预备工作流：
+> * **WorldState Base**：只依赖 Seed Context、WorldSkeleton 与显式参数配置；不得读取 History。
+> * **History Preparation**：只依赖 Seed Context、WorldSkeleton 与 History 规则，产出 HistoryTags / Region Source 候选；不得读取 WorldState、Region 或任何下游结论。
+>
+> 两条分支完成后进入 Phase 3 Region Evaluation。Region 输出 RegionModifier 后，WorldState 才完成 FinalState 定稿。History 规则细节由 `WorldGeneration_Pipeline_Design.md` §4 与 `WorldHistory_Design.md` 拥有；本节只说明调度映射，不把 History 合并为 WorldState 子系统。
+
 | 项 | 内容 |
 |---|---|
 | **Purpose** | 求值 8 个环境参数：`Base` 与 `FinalState` |
