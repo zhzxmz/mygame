@@ -55,6 +55,24 @@ A voxel does not imply that the terrain must visually appear block-based.
 The terrain may remain continuous and natural while Voxel is used only as a
 logical spatial representation.
 
+The current architecture uses Model B:
+
+```text
+Base Terrain
+    +
+VoxelField Edit Layer
+    ->
+Effective Terrain
+    ->
+Density Sampling
+    ->
+Mesh / Collider
+```
+
+`DensityTerrain.VoxelField` is the single authoritative Mutable Terrain Edit
+State. A Chunk never owns VoxelField and never creates a Chunk-local copy of a
+Voxel edit.
+
 The current implementation uses **Terrain Local Space** as the authoritative
 coordinate space for terrain data and Chunk coordinates. World Space positions
 are mapped into Terrain Local Space through the Terrain root Transform.
@@ -110,16 +128,28 @@ A voxel may be represented mathematically from its coordinates.
 `VoxelSize` defines the size represented by one logical Voxel in Terrain Local
 Space.
 
-The value is an implementation parameter rather than a fundamental property
-of the World.
+The new Voxel Terrain / Voxel Mining architecture formally uses:
 
-`VoxelSize` is not fixed to `1`. Any positive implementation value may be used.
-The value may be changed without changing the DensityField sampling resolution
-or the visual resolution of the Terrain Mesh.
+```text
+VoxelSize = 1.0 meter
+```
 
-Final numerical values remain deferred until the corresponding implementation
-requirements become concrete. The temporary values used by the current
-prototype are listed in Deferred Decisions / Known Limitations.
+This value is fixed for the current VoxelField Edit Layer contract and is not
+derived from `DensityTerrain.voxelSize`.
+
+The legacy field `DensityTerrain.voxelSize = 0.1` belongs to the legacy
+Density/Mining pipeline and is frozen. New code must use
+`DensityTerrain.VoxelField.VoxelSize` (1m) for Edit Cell coordinates.
+
+`VoxelSize` is not a fundamental property of the World. It may be changed in a
+future specification revision, but any change must update the VoxelField
+contract, the ChunkVoxelSize contract, and all related validations together.
+
+`VoxelSize` is independent from the DensityField sampling resolution and from
+the visual resolution of the Terrain Mesh.
+
+The approved Scheme A migration keeps `VoxelSize = 1.0m` and adopts
+`ChunkVoxelSize = (75, 37, 50)`; see §6 and `CoordinateMigration.md`.
 
 ---
 
@@ -141,8 +171,19 @@ The voxel represented by coordinate `(X, Y, Z)` corresponds to:
 [Z * VoxelSize, (Z + 1) * VoxelSize)
 ```
 
-These intervals are expressed in Terrain Local Space. The exact
-negative-coordinate behavior is not finalized yet.
+These intervals are expressed in Terrain Local Space.
+
+Negative coordinates use the same floor / half-open contract:
+
+```text
+VoxelSize = 1
+
+Position -0.1  -> Voxel -1
+Position -1.0  -> Voxel -1
+Position -1.1  -> Voxel -2
+```
+
+No epsilon correction or nearest-cell rounding is part of this contract.
 
 ---
 
@@ -153,8 +194,27 @@ Chunk is a finite spatial partition of Space.
 Chunk size is an implementation parameter and is not a fundamental architectural
 requirement.
 
-The commonly used `16 × 16 × 16` configuration is only a reference value.
-It is not required for this project.
+The approved migration target (Scheme A) is:
+
+```text
+ChunkVoxelSize = (75, 37, 50)
+```
+
+`ChunkVoxelSize` is expressed in Voxel units: each value is the number of Voxel
+units along that Chunk axis. It is not a distance in meters and not a Density
+resolution. With `VoxelSize = 1m`:
+
+```text
+ChunkWorldSize = (75m, 37m, 50m)
+```
+
+The earlier `16 × 16 × 16` value was the pre-migration architectural reference;
+for the current implementation it is superseded by the approved Scheme A target
+above (`CoordinateMigration.md`).
+
+The existing prototype may still use legacy derived ChunkVoxelSize values; those
+values belong to the frozen legacy Density/Mining pipeline and must not be used
+for new Voxel Edit Cell / Chunk coordinate calculations.
 
 The final Chunk size should be selected according to:
 
@@ -188,11 +248,13 @@ then:
 ChunkWorldSize = VoxelSize × N
 ```
 
-For a uniform cubic Chunk, this relationship applies independently to X, Y,
-and Z.
+This relationship applies independently on each axis; a Chunk does not need to
+be cubic.
 
-The actual numerical Chunk size remains an implementation decision. Current
-prototype values are temporary and are not architectural constants.
+The actual runtime Chunk configuration is being migrated from the legacy
+prototype to the approved Scheme A target (`VoxelSize = 1m`,
+`ChunkVoxelSize = (75, 37, 50)`) defined in `CoordinateMigration.md`. The new
+Voxel Mining mesh-rebuild path must not run with legacy units.
 
 ---
 
@@ -218,8 +280,23 @@ ChunkCoordinate is absolute in the terrain coordinate system. Selecting a
 generated range (for example `chunkStartCoordinate`) does not shift absolute
 ChunkCoordinate semantics.
 
-The exact behavior for negative coordinates is deferred until the coordinate
-system is expanded to formally support negative Terrain Local Space.
+With `VoxelSize = 1m` and the approved Scheme A `ChunkVoxelSize = (75, 37, 50)`,
+floor semantics give (shown on the X axis; Y and Z use the same rule with 37 and
+50):
+
+```text
+Voxel X  74 -> Chunk  0        Voxel X  -1 -> Chunk -1
+Voxel X  75 -> Chunk  1        Voxel X -75 -> Chunk -1
+Voxel X 149 -> Chunk  1        Voxel X -76 -> Chunk -2
+Voxel X 150 -> Chunk  2
+```
+
+The same rule applies independently on each axis; Chunk axes do not share a
+size. `(-1, 0, 0)` therefore has local X = 74, `(0, 37, 0)` belongs to Chunk
+`(0, 1, 0)` and `(0, 0, 50)` belongs to Chunk `(0, 0, 1)`.
+
+The project must reuse the existing `ChunkSpace` floor / positive-modulo
+implementation. No second Chunk coordinate system may be introduced.
 
 Chunk coordinate must be derived from the same terrain coordinate system used
 by the terrain data and generation.
@@ -247,11 +324,13 @@ appearance.
 DensityField represents the current geometric state of terrain within a
 spatial region.
 
+DensityField is a Surface Generation Representation and a runtime snapshot,
+not the authoritative Mutable Terrain State.
+
 DensityField is responsible for:
 
 * Storing density values
 * Providing density queries
-* Allowing density values to be modified
 * Providing the spatial information necessary to interpret its samples
 
 DensityField is not responsible for:
@@ -261,10 +340,20 @@ DensityField is not responsible for:
 * Item yield
 * Combat
 * Terrain Mesh generation
+* Storing persistent player edits
 
-World Generation may create the initial DensityField.
+World Generation creates the initial Base DensityField.
 
-Terrain Modification may modify an existing DensityField.
+Under the new Voxel Mining architecture, player Mining must not directly modify
+DensityField. Mining writes to `DensityTerrain.VoxelField`, and affected Chunks
+derive a new Effective DensityField from:
+
+```text
+Base Terrain + VoxelField Edit Layer
+```
+
+Legacy V1 code that modified DensityField directly through
+`TerrainModification` / `TerrainMining` is frozen legacy behavior.
 
 Terrain Mesh generation consumes DensityField data.
 
@@ -273,20 +362,51 @@ Conceptual flow:
 ```text
 World Generation
        ↓
-DensityField
+Base DensityField (immutable runtime snapshot)
+       ↓
+       +
+VoxelField Edit Layer
+       ↓
+Effective DensityField (derived)
        ↓
 Terrain Mesh
 ```
 
-and later:
+and after an edit:
 
 ```text
-Spatial Modification
+VoxelField edit
        ↓
-DensityField
+Identify affected Chunk(s)
+       ↓
+Rebuild Effective DensityField from Base + VoxelField
        ↓
 Terrain Mesh Rebuild
 ```
+
+### 9.1 Current Density sampling configuration (Scheme A migration target)
+
+The current DensityField generator uses one scalar `resolution` that is applied
+to all three axes. Per-axis Density resolution is explicitly out of scope for
+this migration; `resolution` is not a per-axis vector.
+
+For the approved Scheme A target (`ChunkVoxelSize = (75, 37, 50)`,
+`VoxelSize = 1m`):
+
+```text
+resolution             = 75     (scalar, shared by X, Y, Z)
+intervals per axis     = 75
+samples per axis       = 76     (SampleCount = Resolution + 1)
+DensityField size      = 76 × 76 × 76 samples per Chunk
+Density sample spacing = X: 1.0m, Y: 37/75m, Z: 50/75m
+```
+
+Density sample spacing is therefore not equal to `VoxelSize` on every axis.
+`VoxelSize`, `ChunkVoxelSize` and Density `resolution` remain three separate
+concepts (§6), and a Density sample is never a Voxel. Sample spacing is a
+surface-generation parameter; it does not change the Voxel Edit Cell contract,
+and it does not by itself guarantee that a Voxel edit produces a visible Mesh
+change.
 
 ---
 
@@ -328,11 +448,23 @@ Terrain Mesh is a visual representation generated from terrain spatial data.
 
 The Mesh is not the authoritative World state.
 
-The authoritative terrain state is represented by spatial data such as:
+The authoritative terrain state is:
 
 ```text
-DensityField
-MaterialField
+Base Terrain (World Seed + Generation Parameters)
++
+DensityTerrain.VoxelField (only Mutable Edit State)
+```
+
+The following are derived runtime data:
+
+```text
+Base DensityField snapshot
+Effective DensityField snapshot
+MaterialField snapshot
+TerrainChunk.Mesh
+MeshFilter.sharedMesh
+MeshCollider.sharedMesh
 ```
 
 The Mesh may be deleted and regenerated without changing the underlying World
@@ -445,26 +577,29 @@ Examples include:
 * Magic
 * Future environmental processes
 
-Terrain Modification must operate on spatial data rather than directly
-editing the generated Mesh.
+Terrain Modification must operate on authoritative Mutable Terrain State rather
+than directly editing the generated Mesh or Density samples.
 
-General flow:
+New Voxel Mining flow:
 
 ```text
 Operation
     ↓
-Spatial Modification
+DensityTerrain.VoxelField edit
     ↓
-DensityField / MaterialField
+Identify affected Chunk(s)
     ↓
-Affected Chunk(s)
+Rebuild Effective Density (Base + VoxelField)
     ↓
-Dirty
+Rebuild Chunk Mesh
     ↓
-Mesh Rebuild
+Sync MeshFilter + MeshCollider
 ```
 
-Different modification methods may coexist.
+Legacy V1 flow that modified DensityField / MaterialField directly is frozen.
+
+Different modification methods may coexist in future, but they must all write
+through the authoritative Edit State layer.
 
 ---
 
@@ -545,35 +680,43 @@ region and available material.
 
 ## 18. Dirty and Mesh Rebuild
 
-When terrain spatial data changes, the affected Chunk must be marked dirty.
+When the authoritative VoxelField changes, the affected Chunk(s) must be
+marked dirty and rebuilt.
 
 Conceptually:
 
 ```text
-Modify Spatial Data
+DensityTerrain.VoxelField edit
         ↓
-Identify Affected Chunk(s)
+Identify affected Chunk(s)
         ↓
 MarkDirty()
         ↓
+Rebuild Effective Density (Base + VoxelField)
+        ↓
 Rebuild Mesh
+        ↓
+Sync MeshFilter + MeshCollider
 ```
 
-A terrain modification near a Chunk boundary may affect neighboring Chunks.
+A Voxel edit near a Chunk boundary may affect neighboring Chunks.
 
-Therefore multiple Chunks may become dirty from a single operation.
+Therefore multiple Chunks may become dirty from a single Voxel edit.
 
-Mesh rebuilding must use the current Chunk spatial data rather than invoking
-World Generation again.
+The Voxel edit itself remains one Terrain-global record in VoxelField. Chunks
+must not copy Voxel state into Chunk-local data.
+
+Mesh rebuilding must use the current authoritative state (Base + VoxelField)
+rather than invoking World Generation again or mutating the Base Density.
 
 This distinction is important:
 
 ```text
 Initial Generation
-    → Generate spatial state
+    → Generate Base Terrain
 
 Mesh Rebuild
-    → Rebuild visual representation from current spatial state
+    → Rebuild visual representation from Base + VoxelField
 ```
 
 A Mesh rebuild must not accidentally regenerate and overwrite previously
@@ -617,6 +760,23 @@ because the Entity is spatially located inside that Chunk.
 
 ---
 
+## 19.4 HiddenFaceContribution 移除与 Dirty（当前实现）
+
+Hidden Face 的最终几何以 `ChunkGeometry.HiddenFaceContributions` 形式由 **MeshOwner**
+（可能是相邻 Chunk，≠ EvaluationOwner）持有。因此：
+
+```text
+每当一个 SpatialFace 被重新评估并移除某个 Chunk 的旧 Contribution，
+该 Chunk 必须被标记为 Dirty 并重新 Assemble（MeshFilter / MeshCollider 同步）。
+```
+
+B3-D 材料边界语义补充：Hidden Face 只在**未挖空（Solid）一侧确有材料**的 Region 生成
+（见 `Specifications/VoxelAwareMesh.md` §13.2 / §13.10）。因此“挖到地表以上”的 Voxel
+不生成盖板，也不产生需要移除的 Contribution；但恢复 Solid 时仍必须移除同一 Face 上
+其他 Region 生成的 Contribution，并 Dirty 对应 Chunk。
+
+B3-C 验证覆盖：mine → restore 后所有 Chunk 的顶点/三角形数量必须精确回到基线，
+且 `HiddenFaceContributions` 计数归零（StageB2-T3 / StageB3C-T6 断言）。
 ## 20. Chunk Lifecycle
 
 A Chunk may conceptually move through the following lifecycle:
@@ -659,7 +819,8 @@ The current implementation focuses on:
 * Clear Chunk spatial boundaries
 * Clear coordinate semantics
 * Separation between Voxel and Density Sample
-* DensityField / MaterialField data ownership
+* `DensityTerrain.VoxelField` as terrain-global authoritative Mutable Edit State
+* Base Density as immutable runtime snapshot
 * Chunk-local Mesh semantics
 * Terrain Local Space as the authoritative terrain data space
 * World-generation independence from Chunk partitioning
@@ -667,7 +828,6 @@ The current implementation focuses on:
 
 The current implementation does not require:
 
-* Mining
 * Mining Yield
 * Streaming
 * Persistence
@@ -688,13 +848,12 @@ The current implementation does not require:
 
 The following decisions remain intentionally open:
 
-* Final VoxelSize
-* Final ChunkVoxelSize
-* Final ChunkWorldSize
-* DensityField sampling resolution
+* Final runtime ChunkWorldSize configuration beyond the approved Scheme A
+  migration target (VoxelSize=1m, ChunkVoxelSize=(75, 37, 50))
+* Final DensityField sampling resolution beyond the approved Scheme A target
+  (`resolution = 75`)
 * Density representation
 * Material representation
-* Negative-coordinate rules
 * Chunk streaming strategy
 * Persistence strategy
 * LOD strategy
@@ -703,14 +862,33 @@ The following decisions remain intentionally open:
 * Material blending
 * World-generation implementation architecture
 
-Current prototype configuration (temporary, not a final design):
+Resolved decisions for the new Voxel Terrain architecture:
 
-* `VoxelSize = 0.1`
-* `ChunkVoxelSize = (415, 203, 276)`
-* A total terrain extent of `83 × 20.3 × 55.2` is split into a `2 × 1 × 2`
-  Chunk grid for testing.
+* `VoxelSize = 1.0m`
+* `ChunkVoxelSize = (75, 37, 50)` for the approved Scheme A migration
+  (`CoordinateMigration.md`); each value is a Voxel count per Chunk axis
+* Density `resolution` is a scalar shared by all three axes; the Scheme A target
+  is `resolution = 75` (76 samples per axis)
+* Negative-coordinate rules use floor / positive-modulo semantics
+* Terrain Local Space and Chunk-local Mesh conventions are unchanged by the
+  migration
 
-These values may be replaced when final Chunk sizing is decided.
+Current prototype configuration (legacy / frozen, not the new Voxel Terrain
+contract):
+
+* Legacy `DensityTerrain.voxelSize` (default `0.1`; the current SampleScene
+  serializes `0.18`)
+* Legacy `ChunkVoxelSize` derived from legacy chunk/terrain size (the current
+  SampleScene serializes `(415, 203, 276)`)
+* A total terrain extent of `83 × 20.3 × 55.2` was split into a `2 × 1 × 2`
+  Chunk grid for testing
+* Legacy Chunk sizes and legacy Voxel units must not be used for new Voxel Edit
+  Cell or Chunk coordinate calculations
+
+The runtime must be migrated from the legacy configuration to the approved
+Scheme A contract (`VoxelSize=1m / ChunkVoxelSize=(75, 37, 50)`, see
+`CoordinateMigration.md`) before the Step 3D Voxel → Mesh rebuild path is
+enabled with the new Voxel unit.
 
 Known limitations of the current implementation:
 
@@ -722,8 +900,9 @@ Known limitations of the current implementation:
   Chunk boundaries. Cross-Chunk Material V2 consistency is deferred.
 * Marking and rebuilding multiple Chunks is supported, but automatic neighbor
   Dirty propagation is not implemented. The caller identifies affected Chunks.
-* Negative-coordinate behavior is a temporary floor / positive-modulo
-  implementation, not a finalized rule.
+* Negative-coordinate floor / positive-modulo semantics are now part of the
+  Voxel coordinate contract; the legacy V1 Density path may still carry its own
+  frozen behavior until cleanup.
 
 These decisions and limitations should be addressed when the corresponding
 implementation requirements become concrete.
@@ -740,15 +919,17 @@ Chunk-related systems:
 3. **Voxel and Density Sample are different concepts.**
 4. **Chunk is a spatial management unit, not the World itself.**
 5. **Chunk size is an implementation parameter, not an architectural law.**
-6. **DensityField represents terrain geometry state.**
+6. **DensityField is a Surface Generation Representation / derived snapshot, not the authoritative Mutable Terrain State.**
 7. **MaterialField represents terrain material state.**
 8. **Mesh is a representation of spatial state, not the authoritative state.**
-9. **Terrain modification changes spatial data, not Mesh directly.**
+9. **New Terrain Modification writes to `DensityTerrain.VoxelField`, not to DensityField or Mesh directly.**
 10. **Mesh rebuilding must not regenerate and overwrite modified World state.**
 11. **World Generation should not fundamentally depend on Chunk partitioning.**
 12. **Entity and Chunk have a spatial relationship, not an ownership relationship.**
 13. **Future systems should extend these boundaries rather than bypass them.**
 14. **Terrain Local Space is the authoritative terrain data and Chunk coordinate space; World Space is reached through the Terrain root Transform.**
 15. **Terrain Mesh uses Chunk-local Space; the Chunk GameObject Transform places it into Terrain Local Space and World Space.**
-16. **VoxelSize and ChunkVoxelSize are configurable implementation parameters; current prototype values are temporary, not architectural constants.**
+16. **The new Voxel Terrain contract uses VoxelSize=1m and ChunkVoxelSize=(75, 37, 50) (approved Scheme A migration, `CoordinateMigration.md`); legacy prototype values are frozen.**
 17. **ChunkCoordinate is absolute; generated-range selection does not change absolute coordinate semantics.**
+18. **VoxelField is Terrain-global; Chunks never own or copy Voxel state.**
+19. **Base Terrain + VoxelField Edit Layer -> Effective Terrain -> Density -> Mesh -> Collider.**

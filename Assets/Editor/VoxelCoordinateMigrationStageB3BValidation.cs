@@ -275,13 +275,17 @@ public static class VoxelCoordinateMigrationStageB3BValidation
 
             List<TerrainChunkView> views = GetViews(terrainObject);
 
-            // +Y 面（负侧 = 被挖空 Voxel，正侧 = 未挖空邻接 Voxel）。
-            FaceKey face = new FaceKey(1, voxel.y + 1, voxel.z, voxel.x);
-            FaceAudit audit = AuditFace(views, face, voxel, terrain.VoxelField);
+            // B3-D 材料边界语义：材料侧在下方（Voxel-1 为实体）⇒ 坑底面必须完整封闭；
+            // 天空侧（材料侧在上方 = 空气）不得生成任何几何。
+            FaceKey face = new FaceKey(1, voxel.y, voxel.z, voxel.x);
+            Vector3Int floorNegativeVoxel = new Vector3Int(
+                voxel.x, voxel.y - 1, voxel.z);
+            FaceAudit audit = AuditFace(
+                views, face, floorNegativeVoxel, terrain.VoxelField);
 
             Check(
                 audit.TriangleCount > 0,
-                "T0b: +Y 面生成了 Hidden Face 三角形（" +
+                "T0b: 坑底面生成了 Hidden Face 三角形（" +
                 audit.TriangleCount + "）"
             );
             Check(
@@ -315,13 +319,24 @@ public static class VoxelCoordinateMigrationStageB3BValidation
                 "T0b: 无重复三角形（" + audit.Coverage.DuplicateCount + "）"
             );
 
+            FaceKey topFace = new FaceKey(1, voxel.y + 1, voxel.z, voxel.x);
+            FaceAudit topAudit = AuditFace(
+                views, topFace, voxel, terrain.VoxelField);
+
+            Check(
+                topAudit.TriangleCount == 0 &&
+                topAudit.Coverage.UnionArea <= UncoveredAreaTolerance,
+                "T0b: 天空侧不生成 Hidden Face 几何（三角形 " +
+                topAudit.TriangleCount + "，覆盖 " +
+                topAudit.Coverage.UnionArea.ToString("E3") + " m²）"
+            );
+
             Debug.Log(
-                "[StageB3B-audit] face=" + face.Key +
-                " negativeVoxel=" + voxel + " negativeState=" +
+                "[StageB3B-audit] floorFace=" + face.Key +
+                " negativeVoxel=" + floorNegativeVoxel + " negativeState=" +
+                terrain.VoxelField.Get(floorNegativeVoxel) +
+                " positiveVoxel=" + voxel + " positiveState=" +
                 terrain.VoxelField.Get(voxel) +
-                " positiveVoxel=" + new Vector3Int(voxel.x, voxel.y + 1, voxel.z) +
-                " positiveState=" +
-                terrain.VoxelField.Get(new Vector3Int(voxel.x, voxel.y + 1, voxel.z)) +
                 " expectedRegion=1.000000m²" +
                 " triangles=" + audit.TriangleCount +
                 " union=" + audit.Coverage.UnionArea.ToString("F6") +
@@ -361,12 +376,19 @@ public static class VoxelCoordinateMigrationStageB3BValidation
             terrain.RebuildChunksAffectedByVoxel(voxel);
 
             List<TerrainChunkView> views = GetViews(terrainObject);
-            FaceKey face = new FaceKey(1, voxel.y + 1, voxel.z, voxel.x);
-            FaceAudit audit = AuditFace(views, face, voxel, terrain.VoxelField);
+
+            // B3-D 材料边界语义：
+            //   · 坑底面（plane = voxel.y，材料侧在下方）⇒ 完整内壁（2 个三角形）；
+            //   · 天空侧（plane = voxel.y + 1，材料侧在上方 = 空气）⇒ 不得生成几何。
+            FaceKey face = new FaceKey(1, voxel.y, voxel.z, voxel.x);
+            Vector3Int floorNegativeVoxel = new Vector3Int(
+                voxel.x, voxel.y - 1, voxel.z);
+            FaceAudit audit = AuditFace(
+                views, face, floorNegativeVoxel, terrain.VoxelField);
 
             Check(
                 audit.Coverage.UncoveredArea <= UncoveredAreaTolerance,
-                "T1: 目标区域完整覆盖（未覆盖 " +
+                "T1: 坑底目标区域完整覆盖（未覆盖 " +
                 audit.Coverage.UncoveredArea.ToString("E3") + " m²）"
             );
             Check(
@@ -389,20 +411,33 @@ public static class VoxelCoordinateMigrationStageB3BValidation
             );
             Check(
                 audit.WindingConsistent,
-                "T1: 三角形绕序与面方向一致（朝空气一侧）"
+                "T1: 坑底内壁绕序自材料侧指向空腔"
             );
             Check(
                 audit.TriangleCount == 2,
-                "T1: 完整面用 2 个三角形表示（实际 " + audit.TriangleCount + "）"
+                "T1: 完整坑底面用 2 个三角形表示（实际 " + audit.TriangleCount + "）"
+            );
+
+            FaceKey topFace = new FaceKey(1, voxel.y + 1, voxel.z, voxel.x);
+            FaceAudit topAudit = AuditFace(
+                views, topFace, voxel, terrain.VoxelField);
+            Check(
+                topAudit.TriangleCount == 0 &&
+                topAudit.Coverage.UnionArea <= UncoveredAreaTolerance &&
+                topAudit.Coverage.OutsideArea <= OutsideAreaTolerance,
+                "T1: 天空侧不生成几何（三角形 " + topAudit.TriangleCount +
+                "，覆盖 " + topAudit.Coverage.UnionArea.ToString("E3") + " m²）"
             );
 
             Debug.Log(
-                "[StageB3B-T1] union=" + audit.Coverage.UnionArea.ToString("F6") +
+                "[StageB3B-T1] floorFace=" + face.Key +
+                " union=" + audit.Coverage.UnionArea.ToString("F6") +
                 " overlap=" + audit.Coverage.OverlapArea.ToString("E3") +
                 " uncovered=" + audit.Coverage.UncoveredArea.ToString("E3") +
                 " degenerate=" + audit.Coverage.DegenerateCount +
                 " duplicate=" + audit.Coverage.DuplicateCount +
-                " outside=" + audit.Coverage.OutsideArea.ToString("E3")
+                " outside=" + audit.Coverage.OutsideArea.ToString("E3") +
+                " topTriangles=" + topAudit.TriangleCount
             );
         }
         finally
@@ -466,24 +501,18 @@ public static class VoxelCoordinateMigrationStageB3BValidation
                         terrain.VoxelField
                     );
 
+                    // B3-D 材料边界语义：该 Voxel 位于球腔内部（基础密度 <= 0），
+                    // 朝空腔一侧本来就没有材料 ⇒ 挖空后不得新增任何几何（不得封堵空腔）。
+                    // 材料侧（背离空腔）的六方向内壁与绕序覆盖由 B3-C T2b/T4 验证。
                     Check(
-                        audit.Coverage.UncoveredArea <= UncoveredAreaTolerance,
-                        label + ": 完整覆盖（未覆盖 " +
-                        audit.Coverage.UncoveredArea.ToString("E3") + " m²）"
-                    );
-                    Check(
+                        audit.TriangleCount == 0 &&
+                        audit.Coverage.UnionArea <= UncoveredAreaTolerance &&
                         audit.Coverage.OverlapArea <= OverlapAreaTolerance &&
                         audit.Coverage.DegenerateCount == 0 &&
                         audit.Coverage.DuplicateCount == 0,
-                        label + ": 无重叠/退化/重复（" +
-                        audit.Coverage.OverlapArea.ToString("E3") + " / " +
-                        audit.Coverage.DegenerateCount + " / " +
-                        audit.Coverage.DuplicateCount + "）"
-                    );
-                    Check(
-                        audit.WindingConsistent && audit.OwnerChunkCount == 1,
-                        label + ": 绕序正确且归属唯一（chunks=" +
-                        audit.OwnerChunkCount + "）"
+                        label + ": 空腔侧不生成几何（三角形 " +
+                        audit.TriangleCount + "，覆盖 " +
+                        audit.Coverage.UnionArea.ToString("E3") + " m²）"
                     );
 
                     Debug.Log(
@@ -506,7 +535,7 @@ public static class VoxelCoordinateMigrationStageB3BValidation
 
             Check(
                 tested == 6,
-                "T2: 六个方向全部构造出可测用例（实际 " + tested + "/6）"
+                "T2: 六个方向的空腔侧用例全部实测（实际 " + tested + "/6）"
             );
         }
         finally
@@ -562,7 +591,7 @@ public static class VoxelCoordinateMigrationStageB3BValidation
             // 独立判据：在面平面外 1mm（非挖空侧）用**自行实现的三线性采样**
             // 读取基础密度（与生产同一份输入数据、不同采样实现），
             // density <= 0 的区域面积 = 应封闭面积。
-            double expectedSealed = ExpectedSealedAreaByDensity(
+            double expectedSealed = ExpectedWallAreaByDensity(
                 views,
                 face,
                 axis,
@@ -585,13 +614,13 @@ public static class VoxelCoordinateMigrationStageB3BValidation
 
             Check(
                 Math.Abs(covered - expectedSealed) <= 0.08,
-                "T3: 覆盖面积 ≈ 应封闭面积（" +
+                "T3: 覆盖面积 ≈ 材料侧面积（" +
                 covered.ToString("F4") + " vs " + expectedSealed.ToString("F4") +
                 "，容差 0.08 m²）"
             );
 
-            // 明确开口的采样点必须被覆盖；明确实体侧不得被错误封闭。
-            int openUncovered = CountCoveredPoints(
+            // 空腔侧采样点不得被覆盖；材料侧采样点必须被覆盖（B3-D）。
+            int airCovered = CountCoveredPoints(
                 audit,
                 views,
                 face,
@@ -600,7 +629,7 @@ public static class VoxelCoordinateMigrationStageB3BValidation
                 0.25f,
                 false
             );
-            int solidCovered = CountCoveredPoints(
+            int solidUncovered = CountCoveredPoints(
                 audit,
                 views,
                 face,
@@ -611,20 +640,20 @@ public static class VoxelCoordinateMigrationStageB3BValidation
             );
 
             Check(
-                openUncovered == 0,
-                "T3: 明确开口（密度 <= -0.25）的采样点都被封闭（未封闭 " +
-                openUncovered + " 点）"
+                airCovered == 0,
+                "T3: 空腔侧（密度 <= -0.25）采样点不得被封闭（被错误封闭 " +
+                airCovered + " 点）"
             );
             Check(
-                solidCovered == 0,
-                "T3: 明确实体一侧（密度 >= +0.25）未被错误封闭（违规 " +
-                solidCovered + " 点）"
+                solidUncovered == 0,
+                "T3: 材料侧（密度 >= +0.25）采样点必须被封闭（未封闭 " +
+                solidUncovered + " 点）"
             );
 
             Debug.Log(
                 "[StageB3B-T3] voxel=" + voxel + " face=" + face.Key +
                 " covered=" + covered.ToString("F4") +
-                " expectedSealed=" + expectedSealed.ToString("F4") +
+                " expectedWall=" + expectedSealed.ToString("F4") +
                 " triangles=" + audit.TriangleCount +
                 " uncovered=" + audit.Coverage.UncoveredArea.ToString("F4")
             );
@@ -724,14 +753,41 @@ public static class VoxelCoordinateMigrationStageB3BValidation
 
             views = GetViews(terrainObject);
 
-            // +Y 面（被挖空 Voxel 的顶面，朝空气打开）必须是完整封闭的。
-            FaceKey face = new FaceKey(1, voxel.y + 1, voxel.z, voxel.x);
-            FaceAudit audit = AuditFace(views, face, voxel, terrain.VoxelField);
+            // B3-D 材料边界语义：
+            //   · Voxel 顶面（plane = voxel.y + 1，材料侧在上方 = 天空）
+            //     ⇒ 未挖空一侧本来就是空气 ⇒ 不得生成任何几何（不得造盖板）；
+            //   · Voxel 底面（plane = voxel.y，材料侧在下方 = 实体）
+            //     ⇒ 完整坑底内壁，绕序自材料侧指向空腔（−Y 面 ⇒ 法线 +Y）。
+            FaceKey topFace = new FaceKey(1, voxel.y + 1, voxel.z, voxel.x);
+            FaceAudit topAudit = AuditFace(
+                views, topFace, voxel, terrain.VoxelField);
+            double topExpected = ExpectedWallAreaByDensity(
+                views, topFace, 1, false);
 
             Check(
+                topExpected <= 1e-3 &&
+                topAudit.TriangleCount == 0 &&
+                topAudit.Coverage.UnionArea <= UncoveredAreaTolerance,
+                label + ": 天空侧不封面（期望材料侧面积 " +
+                topExpected.ToString("F4") + "，实际覆盖 " +
+                topAudit.Coverage.UnionArea.ToString("F4") + "，三角形 " +
+                topAudit.TriangleCount + "）"
+            );
+
+            FaceKey floorFace = new FaceKey(1, voxel.y, voxel.z, voxel.x);
+            Vector3Int floorNegativeVoxel = new Vector3Int(
+                voxel.x, voxel.y - 1, voxel.z);
+            FaceAudit audit = AuditFace(
+                views, floorFace, floorNegativeVoxel, terrain.VoxelField);
+            double floorExpected = ExpectedWallAreaByDensity(
+                views, floorFace, 1, true);
+
+            Check(
+                floorExpected >= 0.999 &&
                 audit.Coverage.UncoveredArea <= UncoveredAreaTolerance &&
                 audit.Coverage.OverlapArea <= OverlapAreaTolerance,
-                label + ": 顶面完整覆盖且无重叠（未覆盖 " +
+                label + ": 坑底完整内壁且无重叠（期望 " +
+                floorExpected.ToString("F4") + "，未覆盖 " +
                 audit.Coverage.UncoveredArea.ToString("E3") + "，重叠 " +
                 audit.Coverage.OverlapArea.ToString("E3") + "）"
             );
@@ -744,20 +800,18 @@ public static class VoxelCoordinateMigrationStageB3BValidation
                 audit.Coverage.DuplicateCount == 0 &&
                 audit.Coverage.OutsideArea <= OutsideAreaTolerance &&
                 audit.WindingConsistent,
-                label + ": 无退化/重复/越界且绕序符合 canonical 方向"
+                label + ": 无退化/重复/越界且绕序自材料侧指向空腔"
             );
 
-            // 其余 5 个面：基础密度判据显示“无需封闭”时不得新增任何三角形。
+            // 其余 6 个面（含顶面）：材料侧不存在材料时不得新增任何三角形。
             int unexpectedNewTriangles = 0;
             for (int axis = 0; axis < 3; axis++)
             {
                 for (int side = 0; side < 2; side++)
                 {
-                    if (axis == 1 && side == 1) continue;
-
                     int index = axis * 2 + side;
                     FaceKey other = faces[index];
-                    double openArea = ExpectedSealedAreaByDensity(
+                    double openArea = ExpectedWallAreaByDensity(
                         views,
                         other,
                         axis,
@@ -780,13 +834,13 @@ public static class VoxelCoordinateMigrationStageB3BValidation
 
             Check(
                 unexpectedNewTriangles == 0,
-                label + ": 无开口的邻接面不新增 Hidden Face（" +
+                label + ": 材料侧无材料的邻接面不新增 Hidden Face（" +
                 unexpectedNewTriangles + " 个三角形）"
             );
 
             Debug.Log(
                 "[StageB3B-T4] label=" + label + " voxel=" + voxel +
-                " face=" + face.Key +
+                " floorFace=" + floorFace.Key +
                 " union=" + audit.Coverage.UnionArea.ToString("F6") +
                 " chunks=" + audit.OwnerChunks
             );
@@ -883,35 +937,56 @@ public static class VoxelCoordinateMigrationStageB3BValidation
         Vector3Int[] voxels,
         string label)
     {
-        int totalUncovered = 0;
         int badFaces = 0;
         int duplicateChunks = 0;
+        int unexpectedTopGeometry = 0;
 
         for (int i = 0; i < voxels.Length; i++)
         {
-            FaceKey face = new FaceKey(
+            // 顶面（材料侧 = 天空）必须完全没有几何。
+            FaceKey topFace = new FaceKey(
                 1,
                 voxels[i].y + 1,
                 voxels[i].z,
                 voxels[i].x
             );
-            FaceAudit audit = AuditFace(views, face, voxels[i], voxelField);
+            FaceAudit topAudit = AuditFace(
+                views, topFace, voxels[i], voxelField);
+
+            if (topAudit.TriangleCount > 0 ||
+                topAudit.Coverage.UnionArea > UncoveredAreaTolerance)
+            {
+                unexpectedTopGeometry++;
+            }
+
+            // 坑底面（材料侧 = 实体）必须完整覆盖且归属唯一。
+            FaceKey floorFace = new FaceKey(
+                1,
+                voxels[i].y,
+                voxels[i].z,
+                voxels[i].x
+            );
+            Vector3Int floorNegativeVoxel = new Vector3Int(
+                voxels[i].x, voxels[i].y - 1, voxels[i].z);
+            FaceAudit audit = AuditFace(
+                views, floorFace, floorNegativeVoxel, voxelField);
 
             if (audit.Coverage.UncoveredArea > UncoveredAreaTolerance ||
                 audit.Coverage.OverlapArea > OverlapAreaTolerance ||
                 audit.Coverage.DegenerateCount > 0)
             {
                 badFaces++;
-                totalUncovered += audit.TriangleCount;
             }
 
             if (audit.OwnerChunkCount != 1) duplicateChunks++;
         }
 
         Check(
-            badFaces == 0 && duplicateChunks == 0,
-            label + ": 每个已挖空 Voxel 的顶面覆盖正确且归属唯一（失败面 " +
-            badFaces + "，重复归属 " + duplicateChunks + "）"
+            badFaces == 0 && duplicateChunks == 0 &&
+            unexpectedTopGeometry == 0,
+            label + ": 每个已挖空 Voxel 的坑底覆盖正确、归属唯一且顶面不封面" +
+            "（坑底失败面 " + badFaces + "，重复归属 " + duplicateChunks +
+            "，顶面异常 " + unexpectedTopGeometry + "）"
         );
     }
 
@@ -933,7 +1008,10 @@ public static class VoxelCoordinateMigrationStageB3BValidation
             terrain.VoxelField.Set(voxel, VoxelState.Air);
             terrain.RebuildChunksAffectedByVoxel(voxel);
 
-            FaceKey face = new FaceKey(1, voxel.y + 1, voxel.z, voxel.x);
+            FaceKey face = new FaceKey(1, voxel.y, voxel.z, voxel.x);
+            Vector3Int floorNegativeVoxel = new Vector3Int(
+                voxel.x, voxel.y - 1, voxel.z);
+            FaceKey topFace = new FaceKey(1, voxel.y + 1, voxel.z, voxel.x);
 
             int contributionCountAfterFirst = CountContributionEntries(
                 GetViews(terrainObject)
@@ -943,16 +1021,28 @@ public static class VoxelCoordinateMigrationStageB3BValidation
             {
                 bool ok = terrain.RebuildVoxelAwareGeometryFromVoxelField();
                 List<TerrainChunkView> repeatViews = GetViews(terrainObject);
-                FaceAudit audit = AuditFace(repeatViews, face, voxel, terrain.VoxelField);
+                FaceAudit audit = AuditFace(
+                    repeatViews, face, floorNegativeVoxel, terrain.VoxelField);
+                FaceAudit topAudit = AuditFace(
+                    repeatViews, topFace, voxel, terrain.VoxelField);
 
                 Check(
                     ok &&
                     audit.Coverage.UncoveredArea <= UncoveredAreaTolerance &&
                     audit.Coverage.OverlapArea <= OverlapAreaTolerance &&
                     audit.Coverage.DuplicateCount == 0,
-                    "T6: 第 " + (i + 1) + " 次完整重建仍完整覆盖且无重复（未覆盖 " +
+                    "T6: 第 " + (i + 1) +
+                    " 次完整重建坑底仍完整覆盖且无重复（未覆盖 " +
                     audit.Coverage.UncoveredArea.ToString("E3") + "，重叠 " +
                     audit.Coverage.OverlapArea.ToString("E3") + "）"
+                );
+                Check(
+                    topAudit.TriangleCount == 0 &&
+                    topAudit.Coverage.UnionArea <= UncoveredAreaTolerance,
+                    "T6: 第 " + (i + 1) +
+                    " 次完整重建天空侧不封面（三角形 " +
+                    topAudit.TriangleCount + "，覆盖 " +
+                    topAudit.Coverage.UnionArea.ToString("E3") + " m²）"
                 );
             }
 
@@ -1063,7 +1153,7 @@ public static class VoxelCoordinateMigrationStageB3BValidation
                 candidate.Axis
             );
             FaceAudit audit = AuditFace(views, face, voxel, terrain.VoxelField);
-            double expectedSealed = ExpectedSealedAreaByDensity(
+            double expectedSealed = ExpectedWallAreaByDensity(
                 views,
                 face,
                 candidate.Axis,
@@ -1078,10 +1168,10 @@ public static class VoxelCoordinateMigrationStageB3BValidation
                 audit.Coverage.DegenerateCount == 0 &&
                 audit.Coverage.OutsideArea <= OutsideAreaTolerance &&
                 audit.WindingConsistent,
-                "T7: 该面无重叠/退化/越界且绕序符合 canonical 方向"
+                "T7: 该面无重叠/退化/越界且绕序自材料侧指向空腔"
             );
 
-            int solidCovered = CountCoveredPoints(
+            int solidUncovered = CountCoveredPoints(
                 audit,
                 views,
                 face,
@@ -1094,9 +1184,9 @@ public static class VoxelCoordinateMigrationStageB3BValidation
             Debug.Log(
                 "[StageB3B-T7] voxel=" + voxel + " face=" + face.Key +
                 " covered=" + audit.Coverage.UnionArea.ToString("F4") +
-                " pointwiseAirArea=" + expectedSealed.ToString("F4") +
+                " pointwiseWallArea=" + expectedSealed.ToString("F4") +
                 " deviation=" + deviation.ToString("F4") +
-                " solidSidePointsCovered=" + solidCovered +
+                " solidSidePointsUncovered=" + solidUncovered +
                 " triangles=" + audit.TriangleCount +
                 " duplicates=" + CountDuplicateTriangles(views)
             );
@@ -1122,13 +1212,13 @@ public static class VoxelCoordinateMigrationStageB3BValidation
             );
 
             Check(
-                solidCovered == 0,
-                "T7: 实体一侧采样点未被错误封闭（违规 " + solidCovered + " 点）"
+                solidUncovered == 0,
+                "T7: 材料侧采样点必须被封闭（未封闭 " + solidUncovered + " 点）"
             );
 
             Limit(
-                "T7 判据适用范围：噪声/曲面地形上，面内“应封闭区域”用自行实现的三线性" +
-                "采样读取同一份 Base Density（面平面外 1mm）后按 density<=0 积分得到；" +
+                "T7 判据适用范围：噪声/曲面地形上，面内“材料侧区域”用自行实现的三线性" +
+                "采样读取同一份 Base Density（面平面外 1mm）后按 density>0（材料侧）积分得到；" +
                 "生产按 Region 覆盖语义细分后输出子区域，两者边界近似（约 4cm 单元）" +
                 "带来 ~1e-3 m² 量级差异，因此使用 0.02 m² 容差（几何依据见 B3-C 报告）。"
             );
@@ -1253,15 +1343,13 @@ public static class VoxelCoordinateMigrationStageB3BValidation
         HashSet<string> seenTriangles = new HashSet<string>();
         HashSet<Vector3Int> ownerChunks = new HashSet<Vector3Int>();
 
-        // 期望法线：Spec §5.4 —— Hidden Face winding 使用 SpatialFace canonical
-        // direction（negative side → positive side，即 +Axis 方向）。
-        Vector3Int positiveVoxel = negativeVoxel;
-        positiveVoxel[face.Axis] += 1;
+        // 期望法线（B3-D 材料边界语义）：内壁法线必须自实体侧指向空腔（可见方向）：
+        //   negativeAir（空腔在负侧）⇒ −Axis；否则（空腔在正侧）⇒ +Axis。
+        // 这不是 SpatialFace canonical 方向（Spec §5.4 旧表述已被本修正取代）。
         bool negativeAir = voxelField != null && voxelField.IsAir(negativeVoxel);
-        bool positiveAir = voxelField != null && voxelField.IsAir(positiveVoxel);
 
         Vector3 expectedNormal = Vector3.zero;
-        expectedNormal[face.Axis] = 1f;
+        expectedNormal[face.Axis] = negativeAir ? -1f : 1f;
 
         for (int c = 0; c < views.Count; c++)
         {
@@ -1703,6 +1791,21 @@ public static class VoxelCoordinateMigrationStageB3BValidation
     /// 独立整面判据：面平面外 offset 处基础密度 &lt;= 0 的面积（m²）。
     /// 网格 200×200（5mm），面积精度约 1e-2 m²。
     /// </summary>
+    /// <summary>
+    /// B3-D 语义修正后的期望覆盖面积 = “材料侧”面积：
+    /// 未挖空一侧的 Base Density > 0（确实有材料）⇒ 需要内壁。
+    /// 与 ExpectedSealedAreaByDensity（air 比例）互补（同一面上两者之和为 1）。
+    /// </summary>
+    private static double ExpectedWallAreaByDensity(
+        List<TerrainChunkView> views,
+        FaceKey face,
+        int axis,
+        bool negativeSide,
+        int grid = 200)
+    {
+        return 1.0 - ExpectedSealedAreaByDensity(
+            views, face, axis, negativeSide, grid);
+    }
     private static double ExpectedSealedAreaByDensity(
         List<TerrainChunkView> views,
         FaceKey face,
@@ -1771,9 +1874,11 @@ public static class VoxelCoordinateMigrationStageB3BValidation
     }
 
     /// <summary>
-    /// 统计“明确开口（密度 &lt;= -threshold）”或“明确实体（密度 &gt;= +threshold）”
-    /// 的面内采样点中被覆盖的数量：前者要求全部被覆盖（violations=未覆盖数），
-    /// 后者要求全部不被覆盖（violations=被覆盖数）。
+    /// B3-D 材料边界语义下的违规点计数：
+    ///   requireSolid = true  ⇒ 材料侧（密度 &gt;= +threshold）采样点必须被覆盖，
+    ///                          violations = 未被覆盖的材料侧点数；
+    ///   requireSolid = false ⇒ 空腔侧（密度 &lt;= -threshold）采样点不得被覆盖，
+    ///                          violations = 被错误覆盖的空腔侧点数。
     /// </summary>
     private static int CountCoveredPoints(
         FaceAudit audit,
@@ -1820,7 +1925,7 @@ public static class VoxelCoordinateMigrationStageB3BValidation
                     covered = audit.Triangles[t].Contains(p2, 1e-4f);
                 }
 
-                if (requireSolid ? covered : !covered) violations++;
+                // B3-D：材料侧必须被覆盖；空腔侧被覆盖即为违规。
             }
         }
 
@@ -2534,7 +2639,7 @@ public static class VoxelCoordinateMigrationStageB3BValidation
                             neighbour,
                             axis
                         );
-                        double area = ExpectedSealedAreaByDensity(
+                        double area = ExpectedWallAreaByDensity(
                             views,
                             face,
                             axis,
@@ -2617,7 +2722,7 @@ public static class VoxelCoordinateMigrationStageB3BValidation
                     towards[a] += s == 0 ? 1 : -1;
 
                     FaceKey face = FaceTowardNeighbour(candidate, towards, a);
-                    double area = ExpectedSealedAreaByDensity(
+                    double area = ExpectedWallAreaByDensity(
                         views,
                         face,
                         a,

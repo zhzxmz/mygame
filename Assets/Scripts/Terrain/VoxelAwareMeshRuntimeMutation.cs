@@ -55,6 +55,49 @@ public static class VoxelAwareMeshRuntimeMutation
     public static readonly List<Vector3Int> LastReassembledChunks =
         new List<Vector3Int>();
 
+    // ---- B3-D：阶段计时与调用计数（性能证据，不参与几何判定） ----
+    /// <summary>最近一次 Mutation 的 Evaluation 阶段耗时（毫秒）。</summary>
+    public static double LastEvaluationMilliseconds { get; private set; }
+
+    /// <summary>最近一次 Mutation 的 Commit 阶段耗时（毫秒）。</summary>
+    public static double LastCommitMilliseconds { get; private set; }
+
+    /// <summary>最近一次 Mutation 的 Assemble 阶段耗时（毫秒）。</summary>
+    public static double LastAssembleMilliseconds { get; private set; }
+
+    /// <summary>最近一次 Mutation 中 Region/Coverage 判定的调用次数。</summary>
+    public static int LastRegionSampleCount { get; private set; }
+
+    /// <summary>Evaluation 内：BuildFaceSegments 边界图构建耗时（毫秒）。</summary>
+    public static double LastSegmentBuildMilliseconds { get; private set; }
+
+    /// <summary>Evaluation 内：ValidateBoundaryGraphSegments 校验耗时（毫秒）。</summary>
+    public static double LastBoundaryGraphValidateMilliseconds { get; private set; }
+
+    /// <summary>Evaluation 内：CollectFaceCoplanarPolygons 共面多边形收集耗时（毫秒）。</summary>
+    public static double LastCollectCoplanarMilliseconds { get; private set; }
+
+    /// <summary>Evaluation 内：BuildVisibilityTargets 可见性目标构建耗时（毫秒）。</summary>
+    public static double LastVisibilityTargetsMilliseconds { get; private set; }
+
+    /// <summary>Evaluation 内：SpatialFace.Evaluate 总耗时（毫秒）。</summary>
+    public static double LastFaceEvaluateMilliseconds { get; private set; }
+
+    /// <summary>Evaluation 内：覆盖分类 DecideRegion 累计耗时（毫秒）。</summary>
+    public static double LastClassifyMilliseconds { get; private set; }
+
+    private static long segmentBuildTicks;
+    private static long boundaryGraphValidateTicks;
+    private static long collectCoplanarTicks;
+    private static long visibilityTargetsTicks;
+    private static long faceEvaluateTicks;
+    private static long classifyTicks;
+
+    private static double TicksToMs(long ticks)
+    {
+        return ticks * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+    }
+
     private static readonly Vector3Int[] Directions =
     {
         new Vector3Int(1, 0, 0),
@@ -64,6 +107,62 @@ public static class VoxelAwareMeshRuntimeMutation
         new Vector3Int(0, 0, 1),
         new Vector3Int(0, 0, -1)
     };
+
+    // =====================================================================
+    // TEMP DIAGNOSTIC（缺面调查：仅 +Z FaceKey=2:50:26:16，只输出日志）
+    // 不改变任何控制流/数据；调查结束后整块删除（含所有 TempTrace* 调用点）。
+    // =====================================================================
+    private const bool TempTraceEnabled = true;
+    private const string TempTraceFaceKey = "2:50:26:16";
+    private static readonly List<string> TempCoplanarSources =
+        new List<string>();
+
+    private static bool TempTraceFace(VoxelAwareMeshPrecut.FaceId face)
+    {
+        return TempTraceEnabled && face.Key == TempTraceFaceKey;
+    }
+
+    private static void TempLog(string tag, string message)
+    {
+        Debug.Log("[FaceTrace " + tag + "] " + message);
+    }
+
+    private static void TempTraceCoverage(
+        VoxelAwareMeshPrecut.FaceId face,
+        Vector2 uv,
+        List<List<Vector2>> polygons)
+    {
+        if (!TempTraceFace(face)) return;
+
+        int hit = -1;
+
+        if (polygons != null)
+        {
+            for (int i = 0; i < polygons.Count; i++)
+            {
+                if (polygons[i] != null && polygons[i].Count >= 3 &&
+                    PointInPolygon(uv, polygons[i]))
+                {
+                    hit = i;
+                    break;
+                }
+            }
+        }
+
+        string source = (hit >= 0 && hit < TempCoplanarSources.Count)
+            ? TempCoplanarSources[hit]
+            : "<no-provenance>";
+
+        TempLog(
+            "COVERAGE",
+            "Face=" + face.Key + " uv=" + uv.ToString("F4") +
+            " IsCoveredByPolygons=" + (hit >= 0) +
+            " coveringPolygonIndex=" + hit +
+            " source=" + source +
+            " polygonCount=" + (polygons != null ? polygons.Count : 0)
+        );
+    }
+    // =================== TEMP DIAGNOSTIC END ===================
 
     public static bool ApplyVoxelStateChange(
         VoxelField voxelField,
@@ -144,6 +243,17 @@ public static class VoxelAwareMeshRuntimeMutation
         // 6 个必要 SpatialFace 全部先完成 Evaluation，不写任何
         // FaceFragmentVisibility / HiddenFaceContribution / DirtySet。
         // -----------------------------------------------------------------
+        System.Diagnostics.Stopwatch evaluationWatch =
+            System.Diagnostics.Stopwatch.StartNew();
+        LastRegionSampleCount = 0;
+        segmentBuildTicks = 0;
+        boundaryGraphValidateTicks = 0;
+        collectCoplanarTicks = 0;
+        visibilityTargetsTicks = 0;
+        faceEvaluateTicks = 0;
+        classifyTicks = 0;
+        VoxelAwareMeshSpatialFace.ResetEvaluationDiagnostics();
+
         List<FaceEvaluationPlan> plans = new List<FaceEvaluationPlan>();
         for (int d = 0; d < Directions.Length; d++)
         {
@@ -156,6 +266,9 @@ public static class VoxelAwareMeshRuntimeMutation
                 chunkVoxelSize
             ));
         }
+
+        evaluationWatch.Stop();
+        LastEvaluationMilliseconds = evaluationWatch.Elapsed.TotalMilliseconds;
 
         LastPlannedFaceCount = plans.Count;
 
@@ -172,6 +285,9 @@ public static class VoxelAwareMeshRuntimeMutation
         // -----------------------------------------------------------------
         // Phase 2 — Commit（全部 Evaluation 成功后一次性提交）
         // -----------------------------------------------------------------
+        System.Diagnostics.Stopwatch commitWatch =
+            System.Diagnostics.Stopwatch.StartNew();
+
         Dictionary<Vector3Int, bool> dirty =
             new Dictionary<Vector3Int, bool>();
         dirty[changedChunk.Coordinate] = true;
@@ -187,6 +303,17 @@ public static class VoxelAwareMeshRuntimeMutation
             if (plans[i].Skipped)
             {
                 // 拓扑边界：只保留 Dirty 语义，不提交 Mesh 状态。
+                // TEMP DIAGNOSTIC
+                if (TempTraceFace(plans[i].Face))
+                {
+                    TempLog(
+                        "COMMIT",
+                        "Face=" + plans[i].Face.Key +
+                        " SKIPPED plan（未提交 Visibility/Contribution）" +
+                        " dirtyCount=" + plans[i].DirtyCoordinates.Count
+                    );
+                }
+
                 for (int d = 0; d < plans[i].DirtyCoordinates.Count; d++)
                 {
                     dirty[plans[i].DirtyCoordinates[d]] = true;
@@ -202,13 +329,29 @@ public static class VoxelAwareMeshRuntimeMutation
             LastDirtyChunks.Add(pair.Key);
         }
 
+        commitWatch.Stop();
+        LastCommitMilliseconds = commitWatch.Elapsed.TotalMilliseconds;
+
         LastMutationCommitted = true;
 
         // -----------------------------------------------------------------
         // Phase 3 — Assemble（只在 Commit 成功后执行）
         // -----------------------------------------------------------------
+        System.Diagnostics.Stopwatch assembleWatch =
+            System.Diagnostics.Stopwatch.StartNew();
         ReassembleDirtyChunks(chunks, lookup, dirty);
+        assembleWatch.Stop();
+        LastAssembleMilliseconds = assembleWatch.Elapsed.TotalMilliseconds;
+
         LastAssemblyExecuted = LastReassembledChunkCount > 0;
+
+        LastSegmentBuildMilliseconds = TicksToMs(segmentBuildTicks);
+        LastBoundaryGraphValidateMilliseconds =
+            TicksToMs(boundaryGraphValidateTicks);
+        LastCollectCoplanarMilliseconds = TicksToMs(collectCoplanarTicks);
+        LastVisibilityTargetsMilliseconds = TicksToMs(visibilityTargetsTicks);
+        LastFaceEvaluateMilliseconds = TicksToMs(faceEvaluateTicks);
+        LastClassifyMilliseconds = TicksToMs(classifyTicks);
 
         return true;
     }
@@ -384,6 +527,19 @@ public static class VoxelAwareMeshRuntimeMutation
             // 拓扑边界：Negative-side Voxel 不在任何 Chunk 内（Terrain 外侧）。
             // 该 Face 无可评估对象，不属于 Domain Gap；
             // 保持既有边界语义：不提交、不 Dirty、不 Assemble（跳过）。
+            // TEMP DIAGNOSTIC
+            if (TempTraceFace(face))
+            {
+                TempLog(
+                    "EVAL",
+                    "Face=" + face.Key + " SKIPPED: evaluationOwner==null" +
+                    " negativeVoxel=" + negativeVoxel +
+                    " positiveVoxel=" + positiveVoxel +
+                    " hasPositive=" + hasPositive +
+                    " ownerCoordinate=" + ownerCoordinate
+                );
+            }
+
             plan.Skipped = true;
             return plan;
         }
@@ -400,6 +556,7 @@ public static class VoxelAwareMeshRuntimeMutation
         plan.NegativeChunk = negativeChunk;
         plan.PositiveChunk = positiveChunk;
 
+        long segmentBuildStart = System.Diagnostics.Stopwatch.GetTimestamp();
         List<VoxelAwareMeshSpatialFace.FaceSegment> segments =
             BuildFaceSegments(
                 face,
@@ -408,12 +565,31 @@ public static class VoxelAwareMeshRuntimeMutation
                 positiveChunk
             );
 
+        segmentBuildTicks +=
+            System.Diagnostics.Stopwatch.GetTimestamp() - segmentBuildStart;
+
         // Spec 13.9.6：部分 Collinear Overlap 是 Validation Failure，
         // 不能被 Planar Graph 静默吞掉，也不能继续 Assemble。
-        if (!ValidateBoundaryGraphSegments(face, segments, out string overlapError))
+        long validateStart = System.Diagnostics.Stopwatch.GetTimestamp();
+        bool segmentsValid = ValidateBoundaryGraphSegments(
+            face, segments, out string overlapError);
+        boundaryGraphValidateTicks +=
+            System.Diagnostics.Stopwatch.GetTimestamp() - validateStart;
+
+        if (!segmentsValid)
         {
             LastBoundaryGraphValidationFailure = true;
             LastBoundaryGraphValidationMessage = overlapError;
+
+            // TEMP DIAGNOSTIC
+            if (TempTraceFace(face))
+            {
+                TempLog(
+                    "EVAL",
+                    "Face=" + face.Key + " FAILED: segmentsInvalid 原因=" +
+                    overlapError
+                );
+            }
 
             plan.Failed = true;
             plan.FailureMessage = overlapError;
@@ -428,6 +604,8 @@ public static class VoxelAwareMeshRuntimeMutation
             // Spec 13.8.3：Solid/Solid 与 Air/Air 都没有 current
             // Solid/Air boundary，因此 Coplanar Base Geometry 在
             // Final Assembly 阶段被过滤（Base Geometry 本身不修改）。
+            long visibilityStartNoBoundary =
+                System.Diagnostics.Stopwatch.GetTimestamp();
             BuildVisibilityTargets(
                 plan,
                 null,
@@ -436,6 +614,8 @@ public static class VoxelAwareMeshRuntimeMutation
                 positiveChunk,
                 evaluationOwner
             );
+            visibilityTargetsTicks +=
+                System.Diagnostics.Stopwatch.GetTimestamp() - visibilityStartNoBoundary;
 
             plan.DirtyCoordinates.Add(ownerCoordinate);
             return plan;
@@ -482,6 +662,24 @@ public static class VoxelAwareMeshRuntimeMutation
 
         string regionFailureMessage = string.Empty;
 
+        // 性能：Coplanar Base Geometry 覆盖判定按 Face 预计算一次，
+        // 供该面所有 Region / 细分采样点复用（原先每个采样点都要重新
+        // 遍历三个 Chunk 的全部 FaceFragments 并分配临时 List）。
+        long collectStart = System.Diagnostics.Stopwatch.GetTimestamp();
+
+        // TEMP DIAGNOSTIC
+        if (TempTraceFace(face)) TempCoplanarSources.Clear();
+
+        List<List<Vector2>> coplanarPolygons = CollectFaceCoplanarPolygons(
+            face,
+            negativeChunk,
+            positiveChunk,
+            evaluationOwner
+        );
+        collectCoplanarTicks +=
+            System.Diagnostics.Stopwatch.GetTimestamp() - collectStart;
+
+        long faceEvaluateStart = System.Diagnostics.Stopwatch.GetTimestamp();
         VoxelAwareMeshSpatialFace.SpatialFaceRecord record =
             VoxelAwareMeshSpatialFace.Evaluate(
                 face,
@@ -497,15 +695,16 @@ public static class VoxelAwareMeshRuntimeMutation
                 derivedGeometry,
                 uv =>
                 {
+                    LastRegionSampleCount++;
+                    long classifyStart = System.Diagnostics.Stopwatch.GetTimestamp();
                     VoxelAwareMeshSpatialFace.RegionDecision decision =
                         DecideRegion(
                             face,
                             uv,
                             solidIsNegative,
                             solidVoxel,
+                            coplanarPolygons,
                             evaluationOwner,
-                            negativeChunk,
-                            positiveChunk,
                             solidChunk,
                             out string failureMessage
                         );
@@ -518,14 +717,32 @@ public static class VoxelAwareMeshRuntimeMutation
                         regionFailureMessage = failureMessage;
                     }
 
+                    classifyTicks +=
+                        System.Diagnostics.Stopwatch.GetTimestamp() - classifyStart;
                     return decision;
                 }
             );
+
+        faceEvaluateTicks +=
+            System.Diagnostics.Stopwatch.GetTimestamp() - faceEvaluateStart;
 
         if (record.EvaluationFailed)
         {
             // Domain Gap 等 Evaluation Failure：该 Face 不产生任何
             // HiddenFaceContribution / Visibility 提交，Mutation 将 Abort。
+            // TEMP DIAGNOSTIC
+            if (TempTraceFace(face))
+            {
+                TempLog(
+                    "EVAL",
+                    "Face=" + face.Key + " FAILED: record.EvaluationFailed" +
+                    " Decision=" + record.Decision +
+                    " 原因=" + (string.IsNullOrEmpty(regionFailureMessage)
+                        ? record.EvaluationFailureMessage
+                        : regionFailureMessage)
+                );
+            }
+
             plan.Failed = true;
             plan.FailureMessage = string.IsNullOrEmpty(regionFailureMessage)
                 ? record.EvaluationFailureMessage
@@ -536,8 +753,31 @@ public static class VoxelAwareMeshRuntimeMutation
         plan.Record = record;
         plan.HiddenFaces = record.HiddenFaces;
 
+        // TEMP DIAGNOSTIC
+        if (TempTraceFace(face))
+        {
+            TempLog(
+                "EVAL",
+                "Face=" + face.Key +
+                " Decision=" + record.Decision +
+                " EvaluationFailed=" + record.EvaluationFailed +
+                " NegativeAir=" + record.NegativeAir +
+                " PositiveAir=" + record.PositiveAir +
+                " NegativeSolid=" + negativeSolid +
+                " PositiveSolid=" + positiveSolid +
+                " CurrentBoundary=" + currentBoundary +
+                " HiddenFaces=" + (record.HiddenFaces != null
+                    ? record.HiddenFaces.Count : -1) +
+                " Regions=" + (record.Regions != null
+                    ? record.Regions.Count : -1) +
+                " MeshOwner=" + meshOwner.Coordinate +
+                " EvaluationOwner=" + evaluationOwner.Coordinate
+            );
+        }
+
         // Spec 13.8.2 / 13.8.3：Final Visibility 是派生结果，
         // 用 Region Classification 的同一个 CoplanarBaseCoverage 判定。
+        long visibilityStart = System.Diagnostics.Stopwatch.GetTimestamp();
         BuildVisibilityTargets(
             plan,
             record,
@@ -546,6 +786,8 @@ public static class VoxelAwareMeshRuntimeMutation
             positiveChunk,
             evaluationOwner
         );
+        visibilityTargetsTicks +=
+            System.Diagnostics.Stopwatch.GetTimestamp() - visibilityStart;
 
         plan.DirtyCoordinates.Add(ownerCoordinate);
         plan.DirtyCoordinates.Add(meshOwner.Coordinate);
@@ -616,6 +858,11 @@ public static class VoxelAwareMeshRuntimeMutation
         MarkDirty(dirty, plan.PositiveChunk);
         MarkDirty(dirty, plan.MeshOwner);
 
+        // 注（B3-E1 调查）：这里保持 Spec 13.8.3 的既有规则
+        // `Visible = currentBoundary && coplanarBaseCoverage`（不做语义改动）。
+        // 该规则在“基岩表面恰好落在 Voxel 平面、且两侧编辑状态均为 Solid”的
+        // 情形下会把地表片段判为不可见（残留 Visible=false），属于本轮
+        // 已定位但**未修复**的独立缺陷（见报告 §6.2），需要单独决策。
         for (int i = 0; i < plan.Visibility.Count; i++)
         {
             VisibilityTarget target = plan.Visibility[i];
@@ -640,6 +887,51 @@ public static class VoxelAwareMeshRuntimeMutation
             }
         }
 
+        // TEMP DIAGNOSTIC（回读被写入的 Contribution：验证是否 Commit / Active）
+        if (TempTraceFace(plan.Face))
+        {
+            string ownerText = plan.MeshOwner != null
+                ? plan.MeshOwner.Coordinate.ToString()
+                : "null";
+
+            List<VoxelAwareMeshSpatialFace.HiddenFaceFragment> stored = null;
+            bool storedOk = plan.MeshOwner != null &&
+                            plan.MeshOwner.Geometry != null &&
+                            plan.MeshOwner.Geometry.HiddenFaceContributions
+                                .TryGetValue(plan.Face.Key, out stored);
+
+            int storedCount = storedOk && stored != null ? stored.Count : 0;
+            int storedActive = 0;
+
+            if (storedOk && stored != null)
+            {
+                for (int i = 0; i < stored.Count; i++)
+                {
+                    if (stored[i] != null && stored[i].Active) storedActive++;
+                }
+            }
+
+            int visibilityFalse = 0;
+            for (int i = 0; i < plan.Visibility.Count; i++)
+            {
+                if (!plan.Visibility[i].Visible) visibilityFalse++;
+            }
+
+            TempLog(
+                "COMMIT",
+                "Face=" + plan.Face.Key +
+                " CurrentBoundary=" + plan.CurrentBoundary +
+                " MeshOwner=" + ownerText +
+                " HiddenFacesComputed=" + (plan.HiddenFaces != null
+                    ? plan.HiddenFaces.Count : -1) +
+                " contributionStored=" + storedOk +
+                " contributionCount=" + storedCount +
+                " contributionActive=" + storedActive +
+                " visibilityTargets=" + plan.Visibility.Count +
+                " visibilityFalse=" + visibilityFalse
+            );
+        }
+
         for (int i = 0; i < plan.DirtyCoordinates.Count; i++)
         {
             dirty[plan.DirtyCoordinates[i]] = true;
@@ -661,15 +953,21 @@ public static class VoxelAwareMeshRuntimeMutation
     /// Region Classification（Spec 13.7 / 13.10）的显式结果。
     /// Domain Gap 等失败返回 EvaluationFailed，绝不被折叠成 NoHiddenFace；
     /// 也不生成 Hidden Face，从而阻止错误 Mesh 进入 Final Assembly。
+    ///
+    /// B3-D 语义修正（材料边界模型）：
+    ///   该函数只在 Face 处于“一侧已挖空 / 另一侧未挖空”时被调用，
+    ///   故 `solidVoxel` 一侧代表仍然存在的材料，已挖空一侧是空腔。
+    ///   内壁只在“未挖空一侧的基础地形确实有材料（Base Density > 0）”时生成，
+    ///   即暴露出来的实体表面；若那一侧本来就是空气（Base Density <= 0），
+    ///   生成任何面都会在空中造出盖板（旧实现正是如此）。
     /// </summary>
     private static VoxelAwareMeshSpatialFace.RegionDecision DecideRegion(
         VoxelAwareMeshPrecut.FaceId face,
         Vector2 uv,
         bool solidIsNegative,
         Vector3Int solidVoxel,
+        List<List<Vector2>> coplanarPolygons,
         TerrainChunk evaluationOwner,
-        TerrainChunk negativeChunk,
-        TerrainChunk positiveChunk,
         TerrainChunk solidChunk,
         out string failureMessage)
     {
@@ -686,13 +984,11 @@ public static class VoxelAwareMeshRuntimeMutation
             return VoxelAwareMeshSpatialFace.RegionDecision.EvaluationFailed;
         }
 
-        // Coplanar Base Geometry 覆盖：由实际 Face Fragment 决定。
-        if (HasCoplanarBaseCoverage(
-            face,
-            uv,
-            negativeChunk,
-            positiveChunk,
-            evaluationOwner))
+        // Coplanar Base Geometry 覆盖：按 Face 预计算的多边形集合（等价于旧逐点扫描）。
+        // TEMP DIAGNOSTIC（只读：重算同一判据并打印覆盖来源）
+        TempTraceCoverage(face, uv, coplanarPolygons);
+
+        if (IsCoveredByPolygons(uv, coplanarPolygons))
         {
             return VoxelAwareMeshSpatialFace.RegionDecision.NoHiddenFace;
         }
@@ -730,9 +1026,102 @@ public static class VoxelAwareMeshRuntimeMutation
             return VoxelAwareMeshSpatialFace.RegionDecision.EvaluationFailed;
         }
 
-        return baseDensity <= 0f
+        // 材料边界模型（B3-D 修正）：
+        //   Base Density > 0 ⇒ 未挖空一侧确实有材料 ⇒ 生成内壁（暴露出来的实体表面）
+        //   Base Density <= 0 ⇒ 那一侧本来就是空气 ⇒ 不生成任何面（避免在空中造盖板）
+        return baseDensity > 0f
             ? VoxelAwareMeshSpatialFace.RegionDecision.HiddenFace
             : VoxelAwareMeshSpatialFace.RegionDecision.NoHiddenFace;
+    }
+
+    /// <summary>
+    /// 收集与该 Face 共面的 Base Geometry 多边形（Face Local 2D），按 Face 计算一次。
+    /// 结果与原先 IsCoveredByCoplanar 的逐点重算完全等价，仅去掉重复扫描与分配。
+    /// </summary>
+    private static List<List<Vector2>> CollectFaceCoplanarPolygons(
+        VoxelAwareMeshPrecut.FaceId face,
+        TerrainChunk negativeChunk,
+        TerrainChunk positiveChunk,
+        TerrainChunk evaluationOwner)
+    {
+        List<List<Vector2>> result = new List<List<Vector2>>();
+
+        AddFaceCoplanarPolygons(face, negativeChunk, result);
+        AddFaceCoplanarPolygons(face, positiveChunk, result);
+        AddFaceCoplanarPolygons(face, evaluationOwner, result);
+
+        return result;
+    }
+
+    private static void AddFaceCoplanarPolygons(
+        VoxelAwareMeshPrecut.FaceId face,
+        TerrainChunk chunk,
+        List<List<Vector2>> target)
+    {
+        if (chunk == null || chunk.Geometry == null) return;
+
+        VoxelAwareMeshPrecut.ChunkGeometry geometry = chunk.Geometry;
+        for (int i = 0; i < geometry.FaceFragments.Count; i++)
+        {
+            VoxelAwareMeshPrecut.FaceFragment fragment =
+                geometry.FaceFragments[i];
+            if (VoxelAwareMeshPrecut.UseLegacyFaceKeyComparison
+                    ? fragment.Face.Key != face.Key
+                    : !fragment.Face.SameAs(face))
+            {
+                continue;
+            }
+
+            List<Vector2> polygon = new List<Vector2>(fragment.Polygon.Count);
+            for (int p = 0; p < fragment.Polygon.Count; p++)
+            {
+                polygon.Add(VoxelAwareMeshSpatialFace.ToFaceLocal(
+                    face,
+                    fragment.Polygon[p],
+                    geometry.ChunkOrigin,
+                    geometry.VoxelSize
+                ));
+            }
+
+            target.Add(polygon);
+
+            // TEMP DIAGNOSTIC（与 target 同序：记录覆盖多边形的来源）
+            if (TempTraceFace(face))
+            {
+                bool overrideValue;
+                bool hasOverride = geometry.FaceFragmentVisibility
+                    .TryGetValue(i, out overrideValue);
+
+                TempCoplanarSources.Add(
+                    "chunk=" + chunk.Coordinate +
+                    " fragmentIndex=" + i +
+                    " active=" + fragment.Active +
+                    " visibilityOverride=" + (hasOverride
+                        ? overrideValue.ToString() : "<none>") +
+                    " points=" + polygon.Count +
+                    " area=" + fragment.Area.ToString("F4") +
+                    " sourceTriangle=" + fragment.SourceTriangle
+                );
+            }
+        }
+    }
+
+    private static bool IsCoveredByPolygons(
+        Vector2 uv,
+        List<List<Vector2>> polygons)
+    {
+        if (polygons == null) return false;
+
+        for (int i = 0; i < polygons.Count; i++)
+        {
+            if (polygons[i] != null && polygons[i].Count >= 3 &&
+                PointInPolygon(uv, polygons[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsCoveredByCoplanar(
@@ -747,7 +1136,12 @@ public static class VoxelAwareMeshRuntimeMutation
         {
             VoxelAwareMeshPrecut.FaceFragment fragment =
                 geometry.FaceFragments[i];
-            if (fragment.Face.Key != face.Key) continue;
+            if (VoxelAwareMeshPrecut.UseLegacyFaceKeyComparison
+                    ? fragment.Face.Key != face.Key
+                    : !fragment.Face.SameAs(face))
+            {
+                continue;
+            }
 
             List<Vector2> polygon = new List<Vector2>();
             for (int p = 0; p < fragment.Polygon.Count; p++)
@@ -785,6 +1179,32 @@ public static class VoxelAwareMeshRuntimeMutation
     /// <summary>
     /// Spec 13.8.3 FaceFragment Visibility Rule。
     /// 该规则只派生 Final Assembly 输出，不修改 Base Geometry。
+    /// </summary>
+    /// <summary>
+    /// B3-E2（Spec §13.8.3 修订）：FaceFragment（与 SpatialFace 共面的基础几何片）
+    /// 的可见性以**基础密度材料边界**为准，而非编辑状态边界：
+    ///   · 平面两侧基础密度恰有一侧 > 0（真实材料表面）且材料侧体素未被挖空 ⇒ 可见；
+    ///   · 两侧都有材料（内部植入 / 内部裁剪面）或两侧都无材料（悬浮片）⇒ 不可见；
+    ///   · 材料侧体素已被挖空（该处材料已移除）⇒ 不可见。
+    /// 注意：FaceFragmentVisibility 是**覆写层**——无条目 = 默认可见（Assemble 只过滤
+    /// 显式 false 的条目），因此本判定只用于写入 true/false 覆写值。
+    /// </summary>
+    public static bool FaceFragmentSurfaceVisible(
+        bool negativeMaterial,
+        bool positiveMaterial,
+        bool negativeSolid,
+        bool positiveSolid)
+    {
+        if (negativeMaterial == positiveMaterial) return false;
+
+        bool materialSideSolid = negativeMaterial ? negativeSolid : positiveSolid;
+        return materialSideSolid;
+    }
+
+    /// <summary>
+    /// 旧的“编辑状态边界 + 共面覆盖”可见性判据。B3-E2 起不再用于
+    /// BuildVisibilityTargets（该判据在“基岩表面落在 Voxel 平面 + 两侧 Solid”
+    /// 时会把真实地表判为不可见），保留仅供历史调用方与回归对照。
     /// </summary>
     public static bool FaceFragmentFinalVisible(
         bool negativeSolid,
@@ -827,7 +1247,12 @@ public static class VoxelAwareMeshRuntimeMutation
         for (int i = 0; i < geometry.Bridges.Count; i++)
         {
             VoxelAwareMeshPrecut.BridgeRecord bridge = geometry.Bridges[i];
-            if (bridge.Face.Key != face.Key) continue;
+            if (VoxelAwareMeshPrecut.UseLegacyFaceKeyComparison
+                    ? bridge.Face.Key != face.Key
+                    : !bridge.Face.SameAs(face))
+            {
+                continue;
+            }
 
             Vector2 a = VoxelAwareMeshSpatialFace.ToFaceLocal(
                 face,
@@ -858,7 +1283,12 @@ public static class VoxelAwareMeshRuntimeMutation
         {
             VoxelAwareMeshPrecut.FaceFragment fragment =
                 geometry.FaceFragments[i];
-            if (fragment.Face.Key != face.Key) continue;
+            if (VoxelAwareMeshPrecut.UseLegacyFaceKeyComparison
+                    ? fragment.Face.Key != face.Key
+                    : !fragment.Face.SameAs(face))
+            {
+                continue;
+            }
 
             for (int p = 0; p < fragment.Polygon.Count; p++)
             {
@@ -1128,37 +1558,90 @@ public static class VoxelAwareMeshRuntimeMutation
         TerrainChunk positiveChunk,
         TerrainChunk evaluationOwner)
     {
-        for (int c = 0; c < chunks.Count; c++)
+        // B3-E1 修复：FaceId.Key 是 **Chunk Local** 标识（U/V 为 Chunk 内体素坐标），
+        // 因此不能遍历“全部 Chunk”按 Key 匹配——不同 Chunk 上 Key 相同的面是
+        // 彼此无关的面。旧实现会把本次 Mutation 的 Visible 值写入其它 Chunk 的
+        // 同 Key 面，并用错误的坐标框架计算 CoplanarBaseCoverage，导致
+        // · 其它 Chunk 的 Base Geometry 被错误隐藏（表面缺失）；
+        // · 恢复（Air → Solid）后本 Chunk 的覆盖区域也无法恢复为 Visible。
+        // 与本 Face 相关的 Chunk 集合与 BuildFaceSegments / Coplanar 收集一致：
+        // EvaluationOwner / Negative / Positive（Boundary 情况下含 MeshOwner）。
+        TerrainChunk meshOwnerChunk = plan.NegativeSolid
+            ? negativeChunk
+            : positiveChunk;
+
+        TerrainChunk[] faceChunks =
         {
-            TerrainChunk chunk = chunks[c];
+            evaluationOwner,
+            negativeChunk,
+            positiveChunk,
+            meshOwnerChunk
+        };
+
+        for (int c = 0; c < faceChunks.Length; c++)
+        {
+            TerrainChunk chunk = faceChunks[c];
             if (chunk == null || chunk.Geometry == null) continue;
+
+            bool duplicated = false;
+            for (int p = 0; p < c; p++)
+            {
+                if (faceChunks[p] == chunk)
+                {
+                    duplicated = true;
+                    break;
+                }
+            }
+
+            if (duplicated) continue;
 
             VoxelAwareMeshPrecut.ChunkGeometry geometry = chunk.Geometry;
             for (int i = 0; i < geometry.FaceFragments.Count; i++)
             {
                 VoxelAwareMeshPrecut.FaceFragment fragment =
                     geometry.FaceFragments[i];
-                if (fragment.Face.Key != plan.Face.Key) continue;
+                if (VoxelAwareMeshPrecut.UseLegacyFaceKeyComparison
+                        ? fragment.Face.Key != plan.Face.Key
+                        : !fragment.Face.SameAs(plan.Face))
+                {
+                    continue;
+                }
 
-                bool coplanarCoverage = plan.CurrentBoundary &&
-                    IsFaceFragmentRegionCovered(
-                        plan.Face,
-                        fragment,
-                        geometry,
-                        record,
-                        negativeChunk,
-                        positiveChunk,
-                        evaluationOwner
-                    );
+                // B3-E2：材料边界可见性（替代旧的 currentBoundary + coverage 判据）：
+                // 只有“基础密度恰好一侧为材料、且该材料侧体素未被挖空”的共面基础几何
+                // 才是当前可见地表；内部植入/内部裁剪面（两侧材料）保持隐藏。
+                Vector2 fragmentSample = FaceFragmentInteriorSample(
+                    plan.Face,
+                    fragment,
+                    geometry
+                );
+
+                bool negativeMaterial = SampleFaceSideMaterial(
+                    plan.Face,
+                    fragmentSample,
+                    true,
+                    negativeChunk,
+                    geometry.ChunkOrigin,
+                    geometry.VoxelSize
+                );
+                bool positiveMaterial = SampleFaceSideMaterial(
+                    plan.Face,
+                    fragmentSample,
+                    false,
+                    positiveChunk,
+                    geometry.ChunkOrigin,
+                    geometry.VoxelSize
+                );
 
                 plan.Visibility.Add(new VisibilityTarget
                 {
                     Geometry = geometry,
                     FragmentIndex = i,
-                    Visible = FaceFragmentFinalVisible(
+                    Visible = FaceFragmentSurfaceVisible(
+                        negativeMaterial,
+                        positiveMaterial,
                         plan.NegativeSolid,
-                        plan.PositiveSolid,
-                        coplanarCoverage
+                        plan.PositiveSolid
                     )
                 });
             }
@@ -1208,6 +1691,43 @@ public static class VoxelAwareMeshRuntimeMutation
             positiveChunk,
             evaluationOwner
         );
+    }
+
+    /// <summary>
+    /// B3-E2：在 Face Local `uv` 处向指定一侧偏移 `Tolerance` 采样基础密度，
+    /// 判断该侧是否为材料（density > 0）。Chunk 缺失 / 采样出域按 Air 处理
+    /// （世界外侧 = Air，与 Spec §13.2 一致）。
+    /// </summary>
+    private static bool SampleFaceSideMaterial(
+        VoxelAwareMeshPrecut.FaceId face,
+        Vector2 uv,
+        bool negativeSide,
+        TerrainChunk sideChunk,
+        Vector3 evaluationOrigin,
+        float voxelSize)
+    {
+        if (sideChunk == null || sideChunk.Density == null) return false;
+
+        Vector3 terrainLocal = VoxelAwareMeshSpatialFace.ToChunkLocal(
+            face,
+            uv,
+            evaluationOrigin,
+            voxelSize
+        ) + evaluationOrigin;
+
+        Vector3 normal = FaceNormal(face);
+        Vector3 samplePoint = negativeSide
+            ? terrainLocal - normal * Tolerance
+            : terrainLocal + normal * Tolerance;
+
+        float density;
+        string error;
+        if (!TrySampleBaseDensity(sideChunk, samplePoint, out density, out error))
+        {
+            return false;
+        }
+
+        return density > 0f;
     }
 
     /// <summary>FaceFragment 的确定性 interior sample（Face Local）。</summary>

@@ -33,12 +33,26 @@ public class TerrainChunk
     public MaterialField Material { get; private set; }
     public Mesh Mesh { get; private set; }
 
+    /// <summary>Voxel-aware Mesh Phase 1：不可变 Raw Base Mesh。</summary>
+    public Mesh RawMesh { get; private set; }
+
+    /// <summary>Voxel-aware Mesh Phase 1：Pre-cut 后的 ChunkGeometry。</summary>
+    public VoxelAwareMeshPrecut.ChunkGeometry Geometry { get; private set; }
+
+    public bool UsesVoxelAwareGeometry
+    {
+        get { return Geometry != null; }
+    }
+
     public bool IsDirty { get; private set; }
 
     public bool IsBuilt
     {
         get { return Density != null && Material != null && Mesh != null; }
     }
+
+    /// <summary>Diagnostics：最近一次 Dispose 实际发起的 Mesh 销毁次数。</summary>
+    public int LastDisposedMeshCount { get; private set; }
 
     public TerrainChunk(
         Vector3Int coordinate,
@@ -109,14 +123,72 @@ public class TerrainChunk
     /// </summary>
     public bool RebuildMesh()
     {
-        if (Density == null || Material == null) return false;
+        return RebuildMesh(Density);
+    }
+
+    /// <summary>
+    /// 使用调用方提供的 Effective DensityField 重建 Mesh。
+    /// 本方法不修改 Base Density / Material；Effective Field 只是派生 Mesh 的输入。
+    /// </summary>
+    public bool RebuildMesh(DensityField effectiveDensity)
+    {
+        if (Density == null || Material == null || effectiveDensity == null)
+        {
+            return false;
+        }
 
         Mesh previousMesh = Mesh;
-        Mesh = TerrainMeshGenerator.Generate(Density, Material, IsoLevel);
+        Mesh = TerrainMeshGenerator.Generate(effectiveDensity, Material, IsoLevel);
         DestroyMesh(previousMesh);
 
         IsDirty = false;
         return true;
+    }
+
+    /// <summary>
+    /// Voxel-aware Mesh Phase 1：保存 Raw Base Mesh 与 Pre-cut ChunkGeometry，
+    /// 并把 Chunk.Mesh 替换为从 Geometry 组装的派生 Mesh。
+    /// RawMesh 不会被销毁，以支持后续 Fill / Restore。
+    /// </summary>
+    public void ApplyVoxelAwareGeometry(
+        VoxelAwareMeshPrecut.ChunkGeometry geometry,
+        Mesh assembledMesh)
+    {
+        if (geometry == null || assembledMesh == null) return;
+
+        Mesh previousMesh = Mesh;
+        RawMesh = geometry.RawMesh;
+        Geometry = geometry;
+        Mesh = assembledMesh;
+
+        if (previousMesh != null &&
+            previousMesh != RawMesh &&
+            previousMesh != assembledMesh)
+        {
+            DestroyMesh(previousMesh);
+        }
+
+        IsDirty = false;
+    }
+
+    /// <summary>
+    /// Phase 2B：Mutation Reassembly 后替换派生 Mesh，保留 RawMesh / ChunkGeometry。
+    /// </summary>
+    public void ReplaceAssembledMesh(Mesh assembledMesh)
+    {
+        if (assembledMesh == null) return;
+
+        Mesh previousMesh = Mesh;
+        Mesh = assembledMesh;
+
+        if (previousMesh != null &&
+            previousMesh != RawMesh &&
+            previousMesh != assembledMesh)
+        {
+            DestroyMesh(previousMesh);
+        }
+
+        IsDirty = false;
     }
 
     /// <summary>Terrain Local Space 位置是否位于当前 Chunk 边界内（半开区间）。</summary>
@@ -186,11 +258,33 @@ public class TerrainChunk
 
     public void Dispose()
     {
-        DestroyMesh(Mesh);
+        // 先取引用并清空字段，再销毁：
+        // play mode 下 Object.Destroy 是延迟销毁，若在销毁后再比较
+        // `RawMesh != Mesh` 会因字段已被置 null 而失去意义，
+        // 导致 Mesh == RawMesh 时同一个 Mesh 被重复 Destroy。
+        Mesh chunkMesh = Mesh;
+        Mesh rawMesh = RawMesh;
+
         Mesh = null;
+        RawMesh = null;
+        Geometry = null;
         Density = null;
         Material = null;
         IsDirty = false;
+
+        LastDisposedMeshCount = 0;
+
+        if (chunkMesh != null)
+        {
+            DestroyMesh(chunkMesh);
+            LastDisposedMeshCount++;
+        }
+
+        if (rawMesh != null && rawMesh != chunkMesh)
+        {
+            DestroyMesh(rawMesh);
+            LastDisposedMeshCount++;
+        }
     }
 
     private static void DestroyMesh(Mesh mesh)

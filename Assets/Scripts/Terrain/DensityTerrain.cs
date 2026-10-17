@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TerrainModificationV2;
 using UnityEngine;
 
 /// <summary>
@@ -109,7 +110,18 @@ public class DensityTerrain : MonoBehaviour
     [Tooltip("在 Editor 中修改参数时自动重新生成 Mesh")]
     public bool regenerateInEditor = true;
 
+    [Header("Voxel-aware Mesh (Phase 1)")]
+    [Tooltip("启用 Raw Base Mesh → Voxel Boundary Pre-cut → ChunkGeometry → Assemble。关闭时走旧 Raw Mesh Path。")]
+    public bool useVoxelAwareMeshPrecut = false;
+
     private const float IsoLevel = 0f;
+
+    /// <summary>
+    /// 新 Voxel 管线的正式 VoxelSize（1m）。
+    /// 注意：public field voxelSize 是旧 Terrain/Density/Mining 管线参数，
+    /// 二者暂时并存；切换 Runtime Mining 后再统一删除旧路径。
+    /// </summary>
+    private const float VoxelFieldVoxelSize = 1f;
 
     private class ChunkEntry
     {
@@ -128,6 +140,35 @@ public class DensityTerrain : MonoBehaviour
     private Material[] materialArray;
     private bool loggedTemporaryVoxelConfig;
 
+    /// <summary>
+    /// Terrain Modification V2 Edit Layer。
+    /// Edit Layer 属于 Terrain-level，不属于任何 Chunk。
+    /// 当前只有 Rebuild 集成使用它；AddEdit / Remove / Save-Load API 属于后续 Step。
+    /// </summary>
+    public TerrainEditLayer EditLayer { get; } = new TerrainEditLayer();
+
+    /// <summary>
+    /// 权威 VoxelField 实例的 backing field。
+    /// 外部只能通过 <see cref="VoxelField"/> 属性读取，不能替换。
+    /// </summary>
+    private VoxelField voxelField;
+
+    /// <summary>
+    /// 整个 DensityTerrain 唯一的权威 VoxelField（Single Source of Truth）。
+    /// 生命周期：OnEnable 创建；之后按需 Ensure，Terrain 生命周期内保持同一实例。
+    /// VoxelSize 固定为 VoxelFieldVoxelSize（1m），与旧 voxelSize 字段无关。
+    /// Sparse 语义：不预填充，未记录坐标返回 Solid。
+    /// TerrainChunk 不持有 VoxelField。
+    /// </summary>
+    public VoxelField VoxelField
+    {
+        get
+        {
+            EnsureVoxelField();
+            return voxelField;
+        }
+    }
+
     public float EffectiveVoxelSize
     {
         get { return Mathf.Max(0.0001f, voxelSize); }
@@ -143,14 +184,53 @@ public class DensityTerrain : MonoBehaviour
         get { return GetEffectiveChunkWorldSize(GetEffectiveChunkVoxelSize()); }
     }
 
+    // =====================================================================
+    // B3-A（F2）：从权威 VoxelField 完整重建 Voxel-Aware 几何的诊断
+    // =====================================================================
+
+    /// <summary>最近一次 Voxel-Aware 完整重建 / 状态重放是否失败。</summary>
+    public bool LastVoxelRebuildFailed { get; private set; }
+
+    /// <summary>失败原因（成功时为空串）。</summary>
+    public string LastVoxelRebuildMessage { get; private set; } = string.Empty;
+
+    /// <summary>最近一次重建中成功重放的显式 Air Voxel 数量。</summary>
+    public int LastVoxelRebuildAppliedVoxelCount { get; private set; }
+
+    /// <summary>被跳过的 Voxel 数量：其所属 Chunk 不存在（世界外 / 未生成）。</summary>
+    public int LastVoxelRebuildSkippedOutsideVoxelCount { get; private set; }
+
+    /// <summary>被跳过的 Voxel 数量：其所属 Chunk 没有 ChunkGeometry（无几何可改）。</summary>
+    public int LastVoxelRebuildSkippedNoGeometryVoxelCount { get; private set; }
+
+    /// <summary>最近一次重建中重新 Assemble 过的不同 Chunk 数量。</summary>
+    public int LastVoxelRebuildReassembledChunkCount { get; private set; }
+
 #if UNITY_EDITOR
     private bool editorRegenerateQueued;
 #endif
 
     private void OnEnable()
     {
+        EnsureVoxelField();
+
         if (!gameObject.scene.IsValid()) return;
         RequestRegenerate();
+    }
+
+    /// <summary>
+    /// 创建并复用唯一的权威 VoxelField。
+    /// 不预填充任何 Voxel：VoxelField 是 sparse Dictionary，
+    /// 未记录的坐标按 DefaultState = Solid 处理。
+    /// </summary>
+    private void EnsureVoxelField()
+    {
+        if (voxelField != null) return;
+
+        voxelField = new VoxelField(
+            VoxelFieldVoxelSize,
+            VoxelState.Solid
+        );
     }
 
     private void OnValidate()
@@ -233,9 +313,6 @@ public class DensityTerrain : MonoBehaviour
 
         float effectiveVoxelSize = EffectiveVoxelSize;
         Vector3Int effectiveChunkVoxelSize = GetEffectiveChunkVoxelSize();
-        Vector3 effectiveChunkWorldSize = GetEffectiveChunkWorldSize(
-            effectiveChunkVoxelSize
-        );
         Vector3Int count = GetPositiveChunkCount();
 
         for (int x = 0; x < count.x; x++)
@@ -255,12 +332,229 @@ public class DensityTerrain : MonoBehaviour
                         coordinate,
                         effectiveVoxelSize,
                         effectiveChunkVoxelSize,
-                        effectiveChunkWorldSize,
                         isFirstChunk
                     );
                 }
             }
         }
+
+        // -----------------------------------------------------------------
+        // B3-A（F2）：Voxel-Aware 路径下，派生几何必须能从权威 VoxelField 恢复。
+        // Base Raw Mesh / Pre-cut Geometry / Chunk 缓存已经在上面的 BuildChunk 中
+        // 全新建立（旧 Geometry、Visibility、Contribution 随旧 Chunk 一起丢弃），
+        // 这里把显式 Air Voxel 通过生产 Mutation 路径重放到新几何上。
+        // 未记录的 Voxel = DefaultState(Solid) ⇒ 天然保持 Base Geometry，无需处理。
+        // -----------------------------------------------------------------
+        if (useVoxelAwareMeshPrecut)
+        {
+            ReplayStoredVoxelStatesForVoxelAwareGeometry();
+        }
+        else
+        {
+            ResetVoxelRebuildDiagnostics();
+        }
+    }
+
+    /// <summary>
+    /// B3-A（F2）：以当前 VoxelField 为唯一输入，完整重建 Voxel-Aware 派生几何。
+    ///
+    /// 流程：Regenerate() 重新生成 Base Raw Mesh + 全新 Pre-cut Geometry（清空旧缓存）
+    /// → 按坐标升序重放显式 Air Voxel（每个 Voxel 恰好一次，走生产 Mutation 路径）
+    /// → 同步被重新 Assemble 的 Chunk 的 MeshFilter / MeshCollider。
+    ///
+    /// 失败时返回 false，并通过 LastVoxelRebuildFailed / LastVoxelRebuildMessage /
+    /// LastVoxelRebuildAppliedVoxelCount 暴露调用方可观察的结果；
+    /// 不静默保留“看似成功但与 VoxelField 不一致”的结果。
+    /// </summary>
+    public bool RebuildVoxelAwareGeometryFromVoxelField()
+    {
+        if (!useVoxelAwareMeshPrecut)
+        {
+            LastVoxelRebuildFailed = true;
+            LastVoxelRebuildMessage =
+                "RebuildVoxelAwareGeometryFromVoxelField 只适用于 " +
+                "useVoxelAwareMeshPrecut = true；密度路径请直接调用 Regenerate()。";
+            Debug.LogError("[DensityTerrain] " + LastVoxelRebuildMessage);
+            return false;
+        }
+
+        Regenerate();
+
+        return !LastVoxelRebuildFailed;
+    }
+
+    private void ResetVoxelRebuildDiagnostics()
+    {
+        LastVoxelRebuildFailed = false;
+        LastVoxelRebuildMessage = string.Empty;
+        LastVoxelRebuildAppliedVoxelCount = 0;
+        LastVoxelRebuildSkippedOutsideVoxelCount = 0;
+        LastVoxelRebuildSkippedNoGeometryVoxelCount = 0;
+        LastVoxelRebuildReassembledChunkCount = 0;
+    }
+
+    /// <summary>
+    /// 把当前显式 Air Voxel 重放到刚重建的 ChunkGeometry 上。
+    /// 每个 Voxel 只应用一次；Mutation 是纯状态驱动的幂等操作
+    /// （不依赖 previousState），因此重放顺序不影响最终结果：
+    /// 同一个 SpatialFace 的最终 Commit 一定发生在触达它的最后一个 Voxel 上，
+    /// 此时该 Face 两侧 Voxel 都已是最终状态。
+    /// </summary>
+    private void ReplayStoredVoxelStatesForVoxelAwareGeometry()
+    {
+        ResetVoxelRebuildDiagnostics();
+
+        VoxelField authoritativeVoxelField = VoxelField;
+        if (authoritativeVoxelField == null) return;
+
+        List<Vector3Int> airVoxels =
+            authoritativeVoxelField.GetStoredCoordinates(VoxelState.Air);
+        if (airVoxels.Count == 0) return;
+
+        Vector3Int chunkVoxelSize = GetEffectiveChunkVoxelSize();
+        List<TerrainChunk> chunkList = CollectTerrainChunks();
+        HashSet<Vector3Int> reassembledCoordinates = new HashSet<Vector3Int>();
+
+        for (int i = 0; i < airVoxels.Count; i++)
+        {
+            Vector3Int voxel = airVoxels[i];
+
+            ChunkEntry ownerEntry;
+            if (!chunkLookup.TryGetValue(
+                ChunkSpace.VoxelToChunk(voxel, chunkVoxelSize),
+                out ownerEntry))
+            {
+                // 世界外 / 未生成 Chunk：该 Voxel 不参与任何 Chunk 几何。
+                LastVoxelRebuildSkippedOutsideVoxelCount++;
+                continue;
+            }
+
+            if (ownerEntry.Chunk == null || ownerEntry.Chunk.Geometry == null)
+            {
+                // 该 Chunk 没有 Pre-cut 几何（例如完全没有基岩面），无可更新内容。
+                LastVoxelRebuildSkippedNoGeometryVoxelCount++;
+                continue;
+            }
+
+            if (!VoxelAwareMeshRuntimeMutation.ApplyVoxelStateChange(
+                authoritativeVoxelField,
+                voxel,
+                VoxelState.Air,
+                chunkList,
+                chunkVoxelSize))
+            {
+                LastVoxelRebuildFailed = true;
+                LastVoxelRebuildMessage =
+                    "Voxel-Aware 完整重建失败：Voxel=" + voxel +
+                    " 的 Mutation 评估未提交。原因=" +
+                    VoxelAwareMeshRuntimeMutation.LastEvaluationFailureMessage +
+                    " 已应用=" + LastVoxelRebuildAppliedVoxelCount +
+                    " 剩余=" + (airVoxels.Count - i - 1) +
+                    " VoxelField 仍保持该 Voxel 为 Air（本轮不实现回滚）。";
+
+                CollectReassembled(reassembledCoordinates);
+                SyncReassembledChunkViews(
+                    VoxelAwareMeshRuntimeMutation.LastReassembledChunks
+                );
+                LastVoxelRebuildReassembledChunkCount =
+                    reassembledCoordinates.Count;
+
+                Debug.LogError("[DensityTerrain] " + LastVoxelRebuildMessage);
+                return;
+            }
+
+            CollectReassembled(reassembledCoordinates);
+            SyncReassembledChunkViews(
+                VoxelAwareMeshRuntimeMutation.LastReassembledChunks
+            );
+            LastVoxelRebuildAppliedVoxelCount++;
+        }
+
+        LastVoxelRebuildReassembledChunkCount = reassembledCoordinates.Count;
+    }
+
+    private void CollectReassembled(HashSet<Vector3Int> target)
+    {
+        if (target == null) return;
+
+        List<Vector3Int> reassembled =
+            VoxelAwareMeshRuntimeMutation.LastReassembledChunks;
+        for (int i = 0; i < reassembled.Count; i++)
+        {
+            target.Add(reassembled[i]);
+        }
+    }
+
+    /// <summary>调用方责任：把重新 Assemble 过的 Chunk 同步到 View（MeshFilter + MeshCollider）。</summary>
+    private void SyncReassembledChunkViews(IReadOnlyList<Vector3Int> coordinates)
+    {
+        if (coordinates == null) return;
+
+        for (int i = 0; i < coordinates.Count; i++)
+        {
+            ChunkEntry entry;
+            if (chunkLookup.TryGetValue(coordinates[i], out entry))
+            {
+                SyncChunkMesh(entry);
+            }
+        }
+    }
+
+    private List<TerrainChunk> CollectTerrainChunks()
+    {
+        List<TerrainChunk> result = new List<TerrainChunk>(chunks.Count);
+
+        for (int i = 0; i < chunks.Count; i++)
+        {
+            ChunkEntry entry = chunks[i];
+            if (entry == null || entry.Chunk == null) continue;
+            result.Add(entry.Chunk);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// B3-A（F1）：Voxel-Aware 路径下的 Voxel 修改必须走生产 Mutation
+    /// （Voxel-Aware Geometry / FaceFragment / HiddenFaceContribution / Visibility / Dirty），
+    /// 不能只重新 Assemble 旧 Geometry。
+    ///
+    /// 契约：调用方已经写入权威 VoxelField（例如 PlayerMiningController 先
+    /// VoxelField.Set(voxel, Air) 再调用入口）；本方法按“当前状态”重放，
+    /// Mutation 不依赖 previousState，因此同一状态重复调用是幂等的。
+    /// 本方法同时承担调用方的 View 同步责任（MeshFilter + MeshCollider）。
+    /// </summary>
+    private int ApplyVoxelAwareStateChangeAndSync(Vector3Int voxelCoordinate)
+    {
+        VoxelField authoritativeVoxelField = VoxelField;
+        if (authoritativeVoxelField == null) return 0;
+
+        List<TerrainChunk> chunkList = CollectTerrainChunks();
+        if (chunkList.Count == 0) return 0;
+
+        bool committed = VoxelAwareMeshRuntimeMutation.ApplyVoxelStateChange(
+            authoritativeVoxelField,
+            voxelCoordinate,
+            authoritativeVoxelField.Get(voxelCoordinate),
+            chunkList,
+            GetEffectiveChunkVoxelSize()
+        );
+
+        if (!committed)
+        {
+            Debug.LogWarning(
+                "[DensityTerrain] Voxel-Aware Mutation 未提交，Voxel=" +
+                voxelCoordinate + " 原因=" +
+                VoxelAwareMeshRuntimeMutation.LastEvaluationFailureMessage
+            );
+            return 0;
+        }
+
+        SyncReassembledChunkViews(
+            VoxelAwareMeshRuntimeMutation.LastReassembledChunks
+        );
+
+        return VoxelAwareMeshRuntimeMutation.LastReassembledChunkCount;
     }
 
     [ContextMenu("Mark First Chunk Dirty")]
@@ -288,7 +582,33 @@ public class DensityTerrain : MonoBehaviour
             ChunkEntry entry = chunks[i];
             if (entry.Chunk == null || !entry.Chunk.IsDirty) continue;
 
-            if (!entry.Chunk.RebuildMesh()) continue;
+            // Phase 3：Feature Switch ON 时不得用 Effective Density Mesh 覆盖
+            // VoxelAware Final Mesh（否则 RawMesh / Geometry / Mesh 的所有权关系被破坏）。
+            // 只从既有 ChunkGeometry 重新 Assemble。
+            if (useVoxelAwareMeshPrecut)
+            {
+                if (entry.Chunk.Geometry == null) continue;
+
+                Mesh reassembled = VoxelAwareMeshPrecut.Assemble(
+                    entry.Chunk.Geometry
+                );
+
+                if (reassembled == null) continue;
+
+                entry.Chunk.ReplaceAssembledMesh(reassembled);
+                SyncChunkMesh(entry);
+
+                rebuilt++;
+                continue;
+            }
+
+            // V2: Rebuild 使用 Effective Density（Base + VoxelField）。
+            // Base DensityField 保持不变，Effective DensityField 是临时派生缓存。
+            DensityField effectiveDensity = BuildEffectiveDensityField(
+                entry.Chunk
+            );
+
+            if (!entry.Chunk.RebuildMesh(effectiveDensity)) continue;
 
             SyncChunkMesh(entry);
 
@@ -298,16 +618,161 @@ public class DensityTerrain : MonoBehaviour
         Debug.Log($"[TerrainChunk] Rebuilt dirty chunks = {rebuilt}");
     }
 
+    /// <summary>
+    /// Step 3D Model B：由不可变 Base DensityField + 权威 VoxelField 构造
+    /// Effective DensityField。每次调用都重新从 Base 开始，不把 Effective
+    /// 写回 Base，也不修改 VoxelField。
+    ///
+    /// 当前 Excavation-only policy：
+    ///   VoxelField.IsAir(PositionToVoxel(sampleLocalPosition))
+    ///       ? VoxelDensityAdapter.AirDensity
+    ///       : BaseDensity
+    /// </summary>
+    public DensityField BuildEffectiveDensityField(TerrainChunk chunk)
+    {
+        if (chunk == null || chunk.Density == null) return null;
+
+        DensityField baseField = chunk.Density;
+        DensityField effectiveField = new DensityField(
+            baseField.ResolutionX,
+            baseField.ResolutionY,
+            baseField.ResolutionZ,
+            baseField.Origin,
+            baseField.Size
+        );
+
+        VoxelField authoritativeVoxelField = VoxelField;
+
+        for (int x = 0; x < baseField.SampleCountX; x++)
+        {
+            for (int y = 0; y < baseField.SampleCountY; y++)
+            {
+                for (int z = 0; z < baseField.SampleCountZ; z++)
+                {
+                    Vector3 sampleLocalPosition = baseField.GetLocalPosition(
+                        x,
+                        y,
+                        z
+                    );
+
+                    Vector3Int voxelCoordinate =
+                        authoritativeVoxelField.PositionToVoxel(
+                            sampleLocalPosition
+                        );
+
+                    effectiveField[x, y, z] =
+                        authoritativeVoxelField.IsAir(voxelCoordinate)
+                            ? VoxelDensityAdapter.AirDensity
+                            : baseField[x, y, z];
+                }
+            }
+        }
+
+        return effectiveField;
+    }
+
+    /// <summary>
+    /// Step 3D：Voxel edit 后同步重建所有受影响的已生成 Chunk。
+    ///
+    /// 契约（两条路径一致）：调用方已经写入权威 VoxelField，再调用本入口。
+    ///
+    /// [密度路径 useVoxelAwareMeshPrecut = false]
+    ///   影响规则：Voxel 的 Terrain Local half-open region [min, max) 与 Chunk
+    ///   Density sampling region 相交（包含共享边界 sample）时，该 Chunk 需要重建，
+    ///   每个 Chunk 从 Base Density + VoxelField 重新派生 Effective Density。
+    ///
+    /// [Voxel-Aware 路径 useVoxelAwareMeshPrecut = true]  —— B3-A（F1）
+    ///   交给 VoxelAwareMeshRuntimeMutation（生产路径）：它按当前权威状态
+    ///   更新 Fragment / HiddenFaceContribution / FaceFragmentVisibility / Dirty，
+    ///   并对受影响 Chunk 重新 Assemble；本方法负责同步相应 View 的
+    ///   MeshFilter / MeshCollider。不再使用 Bounds 近似，也不只 Assemble 旧 Geometry。
+    /// </summary>
+    public int RebuildChunksAffectedByVoxel(Vector3Int voxelCoordinate)
+    {
+        VoxelField authoritativeVoxelField = VoxelField;
+        if (authoritativeVoxelField == null) return 0;
+
+        if (useVoxelAwareMeshPrecut)
+        {
+            return ApplyVoxelAwareStateChangeAndSync(voxelCoordinate);
+        }
+
+        Vector3 voxelMin = authoritativeVoxelField.GetVoxelMin(voxelCoordinate);
+        Vector3 voxelMax = authoritativeVoxelField.GetVoxelMax(voxelCoordinate);
+
+        int rebuilt = 0;
+
+        for (int i = 0; i < chunks.Count; i++)
+        {
+            ChunkEntry entry = chunks[i];
+            if (entry.Chunk == null) continue;
+
+            if (!ChunkMayContainVoxelSamples(
+                entry.Chunk,
+                voxelMin,
+                voxelMax))
+            {
+                continue;
+            }
+
+            DensityField effectiveDensity = BuildEffectiveDensityField(
+                entry.Chunk
+            );
+
+            if (effectiveDensity == null) continue;
+
+            if (!entry.Chunk.RebuildMesh(effectiveDensity)) continue;
+
+            SyncChunkMesh(entry);
+            rebuilt++;
+        }
+
+        return rebuilt;
+    }
+
+    private static bool ChunkMayContainVoxelSamples(
+        TerrainChunk chunk,
+        Vector3 voxelMin,
+        Vector3 voxelMax)
+    {
+        Bounds chunkBounds = chunk.LocalBounds;
+
+        // 使用包含共享边界 sample 的保守规则：
+        // chunk.max >= voxelMin 且 chunk.min < voxelMax。
+        // 这样 Voxel 正好从 Chunk 边界开始时，共享边界 sample 的两侧 Chunk
+        // 都会被重建。
+        return chunkBounds.max.x >= voxelMin.x &&
+               chunkBounds.min.x < voxelMax.x &&
+               chunkBounds.max.y >= voxelMin.y &&
+               chunkBounds.min.y < voxelMax.y &&
+               chunkBounds.max.z >= voxelMin.z &&
+               chunkBounds.min.z < voxelMax.z;
+    }
+
     private void BuildChunk(
         Vector3Int coordinate,
-        float effectiveVoxelSize,
+        float legacyEffectiveVoxelSize,
         Vector3Int effectiveChunkVoxelSize,
-        Vector3 chunkWorldSize,
         bool isFirstChunk)
     {
+        // Scheme A 单位隔离：
+        //   Voxel-aware 路径的 Voxel 网格由 VoxelField 的 1m 契约驱动
+        //   （chunkWorldSize = VoxelField.VoxelSize × chunkVoxelSize）；
+        //   legacy 路径继续使用 DensityTerrain.voxelSize。
+        // 两条路径不得混用不同单位。
+        float chunkVoxelSize = useVoxelAwareMeshPrecut
+            ? VoxelField.VoxelSize
+            : legacyEffectiveVoxelSize;
+
+        Vector3 chunkWorldSize = new Vector3(
+            chunkVoxelSize * Mathf.Max(1, effectiveChunkVoxelSize.x),
+            chunkVoxelSize * Mathf.Max(1, effectiveChunkVoxelSize.y),
+            chunkVoxelSize * Mathf.Max(1, effectiveChunkVoxelSize.z)
+        );
+
         TerrainChunk chunk = new TerrainChunk(
             coordinate,
-            effectiveVoxelSize,
+            chunkVoxelSize,
             effectiveChunkVoxelSize
         );
 
@@ -346,6 +811,44 @@ public class DensityTerrain : MonoBehaviour
         }
 
         chunk.Build(densityField, materialField, IsoLevel);
+
+        if (useVoxelAwareMeshPrecut)
+        {
+            // Phase 1：Raw Base Mesh → Voxel Boundary Pre-cut → ChunkGeometry → Assemble。
+            Mesh rawBaseMesh = chunk.Mesh;
+            VoxelAwareMeshPrecut.ChunkGeometry geometry =
+                VoxelAwareMeshPrecut.Build(
+                    rawBaseMesh,
+                    chunk.ChunkOrigin,
+                    VoxelField.VoxelSize,
+                    coordinate,
+                    effectiveChunkVoxelSize
+                );
+
+            if (geometry != null)
+            {
+                geometry.BaseMaterialField = materialField;
+            }
+
+            if (geometry != null && geometry.HasGeometry)
+            {
+                Mesh assembled = VoxelAwareMeshPrecut.Assemble(geometry);
+                if (assembled != null)
+                {
+                    chunk.ApplyVoxelAwareGeometry(geometry, assembled);
+                }
+            }
+        }
+        else
+        {
+            // Transition / Legacy Model B：Base Density + VoxelField → Effective Density。
+            // Base DensityField 已经保存在 chunk 中且不会被修改。
+            DensityField effectiveDensity = BuildEffectiveDensityField(chunk);
+            if (effectiveDensity != null)
+            {
+                chunk.RebuildMesh(effectiveDensity);
+            }
+        }
 
         GameObject chunkObject = new GameObject(
             $"Chunk_{coordinate.x}_{coordinate.y}_{coordinate.z}"
@@ -604,6 +1107,161 @@ public class DensityTerrain : MonoBehaviour
     public bool TryGetChunk(Vector3 worldPosition, out TerrainChunk chunk)
     {
         return TryGetChunk(WorldToChunkCoordinate(worldPosition), out chunk);
+    }
+
+    /// <summary>
+    /// A 阶段：Voxel 的权威有效性数据（供选择/挖掘使用）。
+    ///   isEditedAir     = VoxelField.Get(voxel) == Air（编辑状态；未记录 = DefaultState=Solid）
+    ///   hasBaseMaterial = 基础 DensityField 在 **Voxel 中心** 采样 density > 0
+    /// 采样位置与本工程既有约定一致（VoxelDensityAdapter.Build 亦以 Voxel 中心采样）。
+    /// 注：Marching Cubes 的等值面可能穿过 Voxel 内部，仅中心采样会漏判
+    /// “部分实体 Voxel”；选择/挖掘路径请使用带命中侧探测点的重载。
+    /// Chunk 缺失 / 采样出域 ⇒ 返回 false 并给出 reason。
+    /// </summary>
+    public bool TryGetVoxelMaterialState(
+        Vector3Int voxel,
+        out bool hasBaseMaterial,
+        out bool isEditedAir,
+        out string reason)
+    {
+        return TryGetVoxelMaterialState(
+            voxel,
+            Vector3.zero,
+            false,
+            out hasBaseMaterial,
+            out isEditedAir,
+            out reason
+        );
+    }
+
+    /// <summary>
+    /// A 阶段修正：带“命中侧探测点”的 Voxel 有效性查询。
+    ///
+    /// 实体存在判据（两者取或，两个采样点都在目标 Voxel 内部）：
+    ///   1) 基础密度场在 Voxel **中心** &gt; 0（既有判据，保留）；
+    ///   2) 基础密度场在 **命中侧探测点** &gt; 0 —— 该点由命中点沿法线进入实体侧
+    ///      Δ 后得到，且 `VoxelField.PositionToVoxel(探测点)` 必须等于本 voxel；
+    ///      Marching Cubes 等值面穿过 Voxel 时（中心 ≤ 0 但 Voxel 内含实体表面），
+    ///      命中位置内侧即为实体，因此这一条能覆盖“部分实体 Voxel”。
+    ///
+    /// 采样接口（Origin / CellSize / SampleCount / 三线性插值）与
+    /// TerrainMeshGenerator 使用的 DensityField 完全一致，IsoLevel = 0 ⇒ density &gt; 0 为实体侧。
+    /// 防御：探测点若不属于本 voxel 则忽略该证据 ⇒ 不会把相邻 Voxel 的实体算到当前目标上；
+    /// 也不会仅凭“Raycast 命中地形”就放行（必须由基础密度场在 Voxel 内证实有材料）。
+    /// </summary>
+    public bool TryGetVoxelMaterialState(
+        Vector3Int voxel,
+        Vector3 terrainLocalHitProbe,
+        out bool hasBaseMaterial,
+        out bool isEditedAir,
+        out string reason)
+    {
+        return TryGetVoxelMaterialState(
+            voxel,
+            terrainLocalHitProbe,
+            true,
+            out hasBaseMaterial,
+            out isEditedAir,
+            out reason
+        );
+    }
+
+    private bool TryGetVoxelMaterialState(
+        Vector3Int voxel,
+        Vector3 terrainLocalHitProbe,
+        bool useHitProbe,
+        out bool hasBaseMaterial,
+        out bool isEditedAir,
+        out string reason)
+    {
+        hasBaseMaterial = false;
+        isEditedAir = false;
+        reason = string.Empty;
+
+        if (VoxelField == null)
+        {
+            reason = "VoxelField is null.";
+            return false;
+        }
+
+        isEditedAir = VoxelField.Get(voxel) == VoxelState.Air;
+
+        Vector3Int chunkCoordinate = ChunkSpace.VoxelToChunk(
+            voxel,
+            chunkVoxelSize
+        );
+
+        TerrainChunk chunk;
+        if (!TryGetChunk(chunkCoordinate, out chunk) ||
+            chunk == null ||
+            chunk.Density == null)
+        {
+            reason = "Chunk " + chunkCoordinate +
+                     " or its Base DensityField is missing.";
+            return false;
+        }
+
+        float voxelSize = VoxelField.VoxelSize;
+        Vector3 centre = new Vector3(
+            (voxel.x + 0.5f) * voxelSize,
+            (voxel.y + 0.5f) * voxelSize,
+            (voxel.z + 0.5f) * voxelSize
+        );
+
+        float centreDensity;
+        string centreError;
+        bool centreSampled = VoxelAwareMeshRuntimeMutation.TrySampleBaseDensity(
+            chunk,
+            centre,
+            out centreDensity,
+            out centreError
+        );
+
+        // 命中侧探测点：只在本 voxel 内部时才作为证据使用。
+        bool probeInsideVoxel =
+            useHitProbe && VoxelField.PositionToVoxel(terrainLocalHitProbe) == voxel;
+
+        float probeDensity = 0f;
+        bool probeSampled = false;
+        if (probeInsideVoxel)
+        {
+            probeSampled = VoxelAwareMeshRuntimeMutation.TrySampleBaseDensity(
+                chunk,
+                terrainLocalHitProbe,
+                out probeDensity,
+                out string _
+            );
+        }
+
+        if (!centreSampled && !probeSampled)
+        {
+            reason = centreError;
+            return false;
+        }
+
+        hasBaseMaterial =
+            (centreSampled && centreDensity > 0f) ||
+            (probeSampled && probeDensity > 0f);
+
+        if (!hasBaseMaterial)
+        {
+            reason = "Voxel " + voxel +
+                     " has no base material (BaseDensity <= 0: centre=" +
+                     FormatBaseDensitySample(centreSampled, centreDensity) +
+                     ", hitProbe=" +
+                     (probeInsideVoxel
+                         ? FormatBaseDensitySample(probeSampled, probeDensity)
+                         : "<not inside voxel>") +
+                     ").";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static string FormatBaseDensitySample(bool sampled, float density)
+    {
+        return sampled ? density.ToString("F4") : "<out of domain>";
     }
 
     /// <summary>绝对 Chunk 坐标 → 已生成 Chunk。</summary>

@@ -13,6 +13,75 @@ public static class VoxelAwareMeshSpatialFace
 {
     public const float Tolerance = 1e-5f;
 
+    // ---- B3-D：Evaluation 内部阶段计时（性能诊断，不参与几何判定）----
+    // 说明：这些计时以“自上次 ResetEvaluationDiagnostics 以来”为窗口，
+    // 由 VoxelAwareMeshRuntimeMutation 在每次 Mutation 开始时复位，
+    // 因此一次挖掘得到的是 6 个 Face 的累加值。
+    /// <summary>Planar Boundary Graph 划分（Partition + 排序）耗时（毫秒）。</summary>
+    public static double LastEvaluationPartitionMilliseconds
+    {
+        get { return TicksToMilliseconds(evaluationPartitionTicks); }
+    }
+
+    /// <summary>Region 覆盖均匀性采样耗时（含其内部三角化）（毫秒）。</summary>
+    public static double LastEvaluationUniformityMilliseconds
+    {
+        get { return TicksToMilliseconds(evaluationUniformityTicks); }
+    }
+
+    /// <summary>Region 覆盖语义细分 BuildCoveragePieces 总耗时（毫秒，含 Uniformity）。</summary>
+    public static double LastEvaluationSubdivideMilliseconds
+    {
+        get { return TicksToMilliseconds(evaluationSubdivideTicks); }
+    }
+
+    /// <summary>多边形三角化（ear clipping）耗时（毫秒，含均匀性采样用三角化）。</summary>
+    public static double LastEvaluationTriangulateMilliseconds
+    {
+        get { return TicksToMilliseconds(evaluationTriangulateTicks); }
+    }
+
+    /// <summary>Region 数 / 细分后子区域数 / 最终生成的三角形数（自上次复位起累加）。</summary>
+    public static int LastEvaluationRegionCount
+    {
+        get { return evaluationRegionCount; }
+    }
+
+    public static int LastEvaluationPieceCount
+    {
+        get { return evaluationPieceCount; }
+    }
+
+    public static int LastEvaluationTriangleCount
+    {
+        get { return evaluationTriangleCount; }
+    }
+
+    private static long evaluationPartitionTicks;
+    private static long evaluationUniformityTicks;
+    private static long evaluationSubdivideTicks;
+    private static long evaluationTriangulateTicks;
+    private static int evaluationRegionCount;
+    private static int evaluationPieceCount;
+    private static int evaluationTriangleCount;
+
+    /// <summary>复位 Evaluation 阶段计时/计数（每次 Mutation 开始时调用一次）。</summary>
+    public static void ResetEvaluationDiagnostics()
+    {
+        evaluationPartitionTicks = 0;
+        evaluationUniformityTicks = 0;
+        evaluationSubdivideTicks = 0;
+        evaluationTriangulateTicks = 0;
+        evaluationRegionCount = 0;
+        evaluationPieceCount = 0;
+        evaluationTriangleCount = 0;
+    }
+
+    private static double TicksToMilliseconds(long ticks)
+    {
+        return ticks * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+    }
+
     public sealed class FaceSegment
     {
         public Vector2 A;
@@ -579,15 +648,29 @@ public static class VoxelAwareMeshSpatialFace
 
         if (negativeAir == positiveAir)
         {
+            long partitionStart = System.Diagnostics.Stopwatch.GetTimestamp();
             record.Regions = Partition(record.Segments, Tolerance);
+            evaluationPartitionTicks +=
+                System.Diagnostics.Stopwatch.GetTimestamp() - partitionStart;
+            evaluationRegionCount += record.Regions.Count;
             return record;
         }
 
         // Midpoint evaluation 的前提：所有 Natural Boundary / Bridge /
         // Coplanar Boundary 已经作为 segments 进入 Partition。
+        long partitionStartMid = System.Diagnostics.Stopwatch.GetTimestamp();
         record.Regions = Partition(record.Segments, Tolerance);
+        evaluationPartitionTicks +=
+            System.Diagnostics.Stopwatch.GetTimestamp() - partitionStartMid;
+        evaluationRegionCount += record.Regions.Count;
 
         Vector3Int solidVoxel = negativeAir ? positiveVoxel : negativeVoxel;
+
+        // B3-D：只有“一侧已挖空、另一侧未挖空”才会走到下面的内壁生成。
+        // Canonical winding（negative→positive）给出 +Axis 法线：
+        //   空腔在正侧（positiveAir）时，+Axis 正好指向空腔 ⇒ 保持 canonical；
+        //   空腔在负侧（negativeAir）时，必须反转绕序才能让法线指向空腔（可见）。
+        bool flipHiddenFaceWinding = negativeAir && !positiveAir;
 
         for (int i = 0; i < record.Regions.Count; i++)
         {
@@ -620,11 +703,19 @@ public static class VoxelAwareMeshSpatialFace
             // 只有同一 Region 内部同时存在“需要封闭/不需要封闭”时才按覆盖边界
             // 拆成子区域，只输出需要封闭的部分。
             bool coverageFailed;
+            long subdivideStart = System.Diagnostics.Stopwatch.GetTimestamp();
             List<List<Vector2>> coveragePieces = BuildCoveragePieces(
                 region.Polygon,
                 regionDecisionResolver,
                 out coverageFailed
             );
+            evaluationSubdivideTicks +=
+                System.Diagnostics.Stopwatch.GetTimestamp() - subdivideStart;
+
+            if (!coverageFailed)
+            {
+                evaluationPieceCount += coveragePieces.Count;
+            }
 
             if (coverageFailed)
             {
@@ -658,10 +749,14 @@ public static class VoxelAwareMeshSpatialFace
                 List<Vector2> piece = coveragePieces[pieceIndex];
                 if (piece == null || piece.Count < 3) continue;
 
+                long pieceTriStart = System.Diagnostics.Stopwatch.GetTimestamp();
                 List<Vector3Int> triangles = TriangulateLoop(
                     piece,
                     Tolerance
                 );
+                evaluationTriangulateTicks +=
+                    System.Diagnostics.Stopwatch.GetTimestamp() - pieceTriStart;
+                evaluationTriangleCount += triangles.Count;
 
                 for (int t = 0; t < triangles.Count; t++)
                 {
@@ -672,6 +767,17 @@ public static class VoxelAwareMeshSpatialFace
                         piece[tri.y],
                         piece[tri.z]
                     };
+
+                    // B3-D：内壁必须朝向“已挖空的一侧”（从实体指向空腔），
+                    // 否则从坑内看到的是背面（被背面剔除）。
+                    // Canonical winding（negative→positive）只在空腔位于负侧时一致，
+                    // 空腔位于正侧（positiveAir）时必须反转三角形绕序。
+                    if (flipHiddenFaceWinding)
+                    {
+                        Vector2 swap = uv[1];
+                        uv[1] = uv[2];
+                        uv[2] = swap;
+                    }
 
                     // 丢弃数值退化碎片（面积 <= 1e-6 m² = 0.001 mm²）：
                     // 近共线顶点产生的薄片方向不可靠，会污染法线。
@@ -772,11 +878,16 @@ public static class VoxelAwareMeshSpatialFace
         }
 
         RegionDecision uniform;
-        if (IsRegionCoverageUniform(
+        long uniformityStart = System.Diagnostics.Stopwatch.GetTimestamp();
+        bool uniformResult = IsRegionCoverageUniform(
             regionPolygon,
             resolver,
             out uniform,
-            out failed))
+            out failed);
+        evaluationUniformityTicks +=
+            System.Diagnostics.Stopwatch.GetTimestamp() - uniformityStart;
+
+        if (uniformResult)
         {
             if (!failed && uniform == RegionDecision.HiddenFace)
             {
@@ -787,6 +898,14 @@ public static class VoxelAwareMeshSpatialFace
         }
 
         if (failed) return pieces;
+
+        // 验证开关（一个 if 包裹，关闭时与原逻辑完全一致）：
+        // Mixed / Uncertain ⇒ 保守生成 HiddenFace，避免薄片材料被单元细分丢弃。
+        if (SpatialFaceDebugSettings.ConservativeHiddenFace)
+        {
+            pieces.Add(regionPolygon);
+            return pieces;
+        }
 
         float minU = float.MaxValue;
         float maxU = float.MinValue;
@@ -975,7 +1094,10 @@ public static class VoxelAwareMeshSpatialFace
         bool hasSample = false;
 
         // 三角化重心（TriangulateLoop 已返回原始下标）。
+        long uniformityTriStart = System.Diagnostics.Stopwatch.GetTimestamp();
         List<Vector3Int> triangles = TriangulateLoop(polygon, Tolerance);
+        evaluationTriangulateTicks +=
+            System.Diagnostics.Stopwatch.GetTimestamp() - uniformityTriStart;
         for (int t = 0; t < triangles.Count; t++)
         {
             Vector3Int tri = triangles[t];

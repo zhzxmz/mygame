@@ -275,9 +275,21 @@ positive side = Voxel (1,0,0)
 
 该方向用于：
 
-- Hidden Face winding；
 - canonical owner；
-- Solid / Air 关系描述。
+- Solid / Air 关系描述；
+- Region 采样（`P-` / `P+`）。
+
+**该方向不决定 Hidden Face 的三角形绕序**（B3-D 材料边界修正）：
+
+```text
+Hidden Face 法线 = 自实体（材料）侧指向被挖空的空腔一侧（可见方向）
+
+Solid-side = Negative ⇒ 法线 = −Axis
+Solid-side = Positive ⇒ 法线 = +Axis
+```
+
+即 canonical 方向（negative → positive）只在“空腔位于正侧”时与可见方向一致；
+“空腔位于负侧”时必须反转三角形绕序，否则从坑内看到的是背面（被背面剔除）。
 
 ### 5.5 No Registry Requirement
 
@@ -929,6 +941,22 @@ Air ↔ Air：
 
 世界边界按 `Outside = Air` 处理。
 
+**生成条件的材料边界修正（B3-D）**：`Air ↔ Solid` 只是必要条件。具体到每个 Region，
+只有**未挖空（Solid）一侧在 Base Density 中确有材料**（`BaseDensity(Solid-side) > IsoLevel`）
+时才生成 Hidden Face（暴露出来的实体表面）；若 Solid 一侧本来就是空气
+（`BaseDensity(Solid-side) <= IsoLevel`，例如挖到地表以上、或空腔内部），
+则不得生成任何面：
+
+```text
+CurrentBoundaryState（Air ↔ Solid）
+    AND BaseDensity(Solid-side) > IsoLevel
+    AND !CoplanarBaseCoverage(Region)
+    ⇒ Hidden Face
+```
+
+否则会出现“空中盖板 / 封堵空腔”这类错误面（本轮实际缺陷）。绕序必须自实体侧
+指向空腔（见 §5.4）。
+
 ### 13.3 One Evaluation Result
 
 同一个 SpatialFace 只允许一个 Hidden Face evaluation result。
@@ -1200,20 +1228,20 @@ Positive = Air
 Solid-side = Negative
 ```
 
-Region classification：
+Region classification（B3-D 材料边界语义）：
 
 ```text
 BaseDensity(P-) > IsoLevel
     →
-Natural Solid Coverage = true
+Solid-side 确有材料 ⇒ 需要暴露内壁
     →
-No Hidden Face
+Hidden Face
 
 BaseDensity(P-) <= IsoLevel
     →
-Natural Solid Coverage = false
+Solid-side 本来就是空气 ⇒ 无材料可暴露
     →
-Uncovered Region
+No Hidden Face（Region 保持开放，不得造盖板）
 ```
 
 反向情况完全对称：
@@ -1226,15 +1254,15 @@ Solid-side = Positive
 
 BaseDensity(P+) > IsoLevel
     →
-Natural Solid Coverage = true
+Solid-side 确有材料 ⇒ 需要暴露内壁
     →
-No Hidden Face
+Hidden Face
 
 BaseDensity(P+) <= IsoLevel
     →
-Natural Solid Coverage = false
+Solid-side 本来就是空气 ⇒ 无材料可暴露
     →
-Uncovered Region
+No Hidden Face（Region 保持开放，不得造盖板）
 ```
 
 #### 13.7.6 Region 覆盖语义细分（当前实现，B3-C）
@@ -1248,7 +1276,7 @@ Region 由 Bridge / Coplanar / Natural Boundary 划分，但基础表面（Solid
 
 ```text
 Region 内部采样一致  → 保持既有行为：整片 Polygon 作为 Hidden Face（几何不变）
-Region 内部采样不一致 → 按覆盖判定符号边界细分为子区域，只输出需要封闭的子区域
+Region 内部采样不一致 → 按覆盖判定符号边界细分为子区域，只输出“材料侧确有材料”的子区域
     · 细分单元 ≤ 4cm；跨边界单元用二分求交定位边界，再按“开口”半平面裁剪
     · 完整落在 Region 内且全开口的单元贪心合并为矩形（限制三角形数量）
     · 丢弃 ≤ 1e-6 m² 的数值退化薄片
@@ -1340,30 +1368,41 @@ Final Assembly Filtering
 决定是否输出 FaceFragment
 ```
 
-#### 13.8.3 FaceFragment Visibility Rule
+#### 13.8.3 FaceFragment Visibility Rule（B3-E2 修订）
 
-对 Face Region 与覆盖它的 Coplanar Base Geometry：
+FaceFragment 是**与 SpatialFace 共面的基础几何片**。`FaceFragmentVisibility` 是
+**覆写层**：`Assemble` 只过滤“显式写入 `false`”的条目，**无条目 = 默认可见**。
+
+可见性必须以**基础密度材料边界**为准，而不是编辑状态 `Solid/Air` 边界。原因：
+编辑状态边界无法区分“外部地表”与“内部几何 / 植入片”，会把**恰好落在 Voxel 平面上的
+真实地表**在 `Solid/Solid` 状态下误判为不可见，并在 `Solid → Air → Solid`
+之后残留过期的 `false` 覆写（B3-E1 定位、B3-E2 修复）。
 
 ```text
-Current State Solid / Solid
-    →
-No current Solid/Air boundary
-    →
-FaceFragment Final Visible = false
+对 FaceFragment 的确定性 interior sample（Face Local）：
 
-Current State Air / Air
-    →
-No current Solid/Air boundary
-    →
-FaceFragment Final Visible = false
+negMaterial = BaseDensity(P-) > IsoLevel
+posMaterial = BaseDensity(P+) > IsoLevel
 
-Current State Solid / Air 或 Air / Solid
-    →
-存在 current Solid/Air boundary
-    →
-若 Region 被 Coplanar Base Geometry 覆盖：
-        FaceFragment Final Visible = true
-        Hidden Face = false
+恰有一侧为材料（negMaterial != posMaterial）：
+    materialSideSolid = negMaterial ? NegativeSolid : PositiveSolid
+    materialSideSolid == true  → FaceFragment Visible = true   （当前可见地表）
+    materialSideSolid == false → FaceFragment Visible = false  （该处材料已被挖空）
+
+两侧都为材料（内部植入 / 内部裁剪面）：
+    FaceFragment Visible = false      （内部几何不得显示）
+
+两侧都无材料（悬浮片 / 空中几何）：
+    FaceFragment Visible = false
+```
+
+补充约束：
+
+```text
+Chunk 缺失 / 采样出域 ⇒ 该侧按 Air 处理（世界外侧 = Air，见 §13.2）
+只允许写入本 Face 所属 Chunk 的条目（B3-E1；FaceId.Key 为 Chunk Local）
+Solid → Air → Solid 之后必须回到与初始基线逐三角形一致的状态
+（不得残留过期 false 覆写；覆写层不得覆盖当前材料边界的判定）
 ```
 
 ### 13.9 Cross-Chunk Boundary Segment Identity and Dedup
@@ -1508,11 +1547,16 @@ Air                    | Solid
 对每个 Region：
 
 ```text
+SolidSideMaterial(Region)
+=
+    在 Solid-side infinitesimal offset 处
+    BaseDensity > IsoLevel
+
 NeedHiddenFace(Region)
 =
     CurrentBoundaryState
     AND
-    !NaturalBaseCoverage(Region)
+    SolidSideMaterial(Region)
     AND
     !CoplanarBaseCoverage(Region)
 ```
@@ -1525,10 +1569,6 @@ CurrentBoundaryState =
     OR
     (Negative Air AND Positive Solid)
 
-NaturalBaseCoverage(Region) =
-    在 Solid-side infinitesimal offset 处
-    BaseDensity > IsoLevel
-
 CoplanarBaseCoverage(Region) =
     Region 被当前 SpatialFace 的 Coplanar Base Geometry 覆盖
 ```
@@ -1539,7 +1579,7 @@ CoplanarBaseCoverage(Region) =
 CoplanarBaseCoverage(Region) == true
 ```
 
-则：
+则（Base Geometry 已提供表面，不再叠加内壁）：
 
 ```text
 FaceFragment Final Visible = true
@@ -1549,14 +1589,12 @@ Hidden Face = false
 如果：
 
 ```text
-NaturalBaseCoverage(Region) == true
+SolidSideMaterial(Region) == false
 ```
 
-则：
+则（Solid 一侧本来就是空气，没有材料可以暴露）：
 
 ```text
-Natural solid exists elsewhere
-    →
 No Hidden Face
 FaceFragment Final Visible 取决于 13.8.3
 ```
@@ -1572,6 +1610,8 @@ NeedHiddenFace(Region) == true
 ```text
 Hidden Face Fragment
     →
+法线自 Solid-side 指向 Air-side（可见方向，见 §5.4）
+    →
 Solid-side Chunk
     →
 VoxelMainMaterial(Solid-side Voxel)
@@ -1582,6 +1622,8 @@ VoxelMainMaterial(Solid-side Voxel)
 - Region Partition 仍由完整 Planar Boundary Graph 决定。
 - `isSolidSide` 的外部输入由本节 Base Density classification 正式替代。
 - 不允许因为 Bridge 存在就直接生成 Hidden Face。
+- 不允许在 Solid 一侧为空气的 Region 生成 Hidden Face（B3-D 修正）。
+- Hidden Face 绕序必须自 Solid-side 指向 Air-side（不是 canonical 方向）。
 
 ---
 
@@ -1955,6 +1997,15 @@ No duplicate Hidden Face for the same SpatialFace
 No duplicate final Mesh Vertex / Edge on the same cutting boundary
 ```
 
+几何正确性（B3-D 材料边界）：
+
+```text
+Hidden Face 仅生成于 Solid-side 确有材料的 Region
+Solid-side 为空气的 Region ⇒ 0 几何（不得造盖板 / 不得封堵空腔）
+Hidden Face 法线方向 = 自 Solid-side 指向 Air-side（可见方向）
+被挖空 Voxel 内部不残留 Base Geometry（不得出现悬浮地表）
+```
+
 ---
 
 ## 25. Current Scope
@@ -2013,6 +2064,13 @@ Chunk boundary                         → 1 logical SpatialFace, canonical owne
 Negative coordinates                   → floor / min-corner semantics
 Repeated excavation                    → idempotent evaluation
 Excavation leaving line / point        → degenerate geometry deleted consistently
+Surface excavation (flat fixture)      → 天空侧 0 几何、坑底完整内壁、绕序自材料侧指向空腔
+Excavation inside cavity               → 朝空腔面 0 新增几何（不得封堵空腔）
+Six directions                         → 六方向均按材料分布生成 / 不生成内壁
+Adjacent two voxels                    → 共享面 0 几何（空腔连通）；挖掘顺序无关
+Incremental vs full rebuild            → 最终几何逐面一致
+Restore (Air → Solid)                  → 回到基线几何且无残留贡献
+Chunk boundary                         → 有几何的面归属唯一 Chunk（不重复、不丢失）
 ```
 
 ---

@@ -1385,6 +1385,10 @@ public static class TerrainMultiChunkValidation
         ValidateMiningDoesNotRegenerateWorld();
         ValidateMiningWithNonIdentityTransform();
         ValidateMiningMeshResult();
+        ValidateMiningContinuousCenter();
+        ValidateMiningSmallBrushFallback();
+        ValidateMiningAcrossGenerationModes();
+        ValidateMiningFallbackContract();
     }
 
     private static void ValidateMiningSingleChunk()
@@ -1582,11 +1586,8 @@ public static class TerrainMultiChunkValidation
                 "Mining transform: local brush maps back to containing chunk"
             );
             Check(
-                Mathf.Abs(
-                    SampleDensityAtLocal(chunk.Density, brushBounds.center) -
-                    TerrainMining.AirDensity
-                ) < 0.0001f,
-                "Mining transform: brush center density is air"
+                SampleDensityAtLocal(chunk.Density, brushBounds.center) <= 0f,
+                "Mining transform: brush center density is air (density <= 0)"
             );
 
             CheckChunkViews(
@@ -1643,11 +1644,8 @@ public static class TerrainMultiChunkValidation
             ValidateChunkLocalVertices(chunk0, "Mining mesh");
             CheckNoMeshVerticesDeepInside(chunk0, brushBounds, "Mining mesh");
             Check(
-                Mathf.Abs(
-                    SampleDensityAtLocal(chunk0.Density, brushBounds.center) -
-                    TerrainMining.AirDensity
-                ) < 0.0001f,
-                "Mining mesh: brush center density is air"
+                SampleDensityAtLocal(chunk0.Density, brushBounds.center) <= 0f,
+                "Mining mesh: brush center density is air (density <= 0)"
             );
 
             CheckChunkViews(
@@ -1664,6 +1662,702 @@ public static class TerrainMultiChunkValidation
         finally
         {
             DestroyTerrain(terrain);
+        }
+    }
+
+    private static void ValidateMiningContinuousCenter()
+    {
+        DensityTerrain terrain = CreateTerrain(
+            "Validation_Mining_ContinuousCenter",
+            DensityGenerationMode.HeightField
+        );
+
+        try
+        {
+            if (!terrain.TryGetChunk(
+                new Vector3Int(0, 0, 0),
+                out TerrainChunk chunk) ||
+                chunk == null)
+            {
+                Check(false, "Continuous center: chunk exists");
+                return;
+            }
+
+            Vector3 localCenter = new Vector3(10.37f, 10.82f, 20.14f);
+            Vector3 size = new Vector3(3f, 3f, 3f);
+            CubeModificationShape shape = new CubeModificationShape(size);
+
+            CaptureChunkData(
+                chunk,
+                out float[,,] beforeDensity,
+                out MaterialType[,,] beforeMaterial
+            );
+
+            int modified = TerrainMining.MineCube(
+                terrain,
+                localCenter,
+                size,
+                rebuild: false
+            );
+
+            Check(
+                modified > 0,
+                "Continuous center: modified density samples > 0"
+            );
+
+            int insideCount = 0;
+            int formulaMismatches = 0;
+            int outsideMismatches = 0;
+            bool foundChangedSample = false;
+            bool foundNonSentinelValue = false;
+
+            for (int x = 0; x < chunk.Density.SampleCountX; x++)
+            {
+                for (int y = 0; y < chunk.Density.SampleCountY; y++)
+                {
+                    for (int z = 0; z < chunk.Density.SampleCountZ; z++)
+                    {
+                        Vector3 samplePosition = chunk.Density.GetLocalPosition(
+                            x,
+                            y,
+                            z
+                        );
+
+                        float shapeSignedValue = shape.EvaluateSignedValue(
+                            localCenter,
+                            samplePosition
+                        );
+
+                        if (shapeSignedValue <= 0f)
+                        {
+                            insideCount++;
+
+                            float expectedDensity = Mathf.Min(
+                                beforeDensity[x, y, z],
+                                shapeSignedValue
+                            );
+                            MaterialType expectedMaterial = expectedDensity <= 0f
+                                ? MaterialType.Air
+                                : beforeMaterial[x, y, z];
+
+                            if (Mathf.Abs(
+                                chunk.Density[x, y, z] - expectedDensity
+                            ) > 0.0001f ||
+                                chunk.Material[x, y, z] != expectedMaterial)
+                            {
+                                formulaMismatches++;
+                            }
+
+                            bool sampleChanged =
+                                Mathf.Abs(
+                                    chunk.Density[x, y, z] -
+                                    beforeDensity[x, y, z]
+                                ) > 0.0001f ||
+                                chunk.Material[x, y, z] !=
+                                beforeMaterial[x, y, z];
+
+                            if (sampleChanged)
+                            {
+                                foundChangedSample = true;
+                            }
+
+                            if (sampleChanged &&
+                                Mathf.Abs(
+                                    chunk.Density[x, y, z] -
+                                    TerrainMining.AirDensity
+                                ) > 0.0001f &&
+                                chunk.Density[x, y, z] <= 0f)
+                            {
+                                foundNonSentinelValue = true;
+                            }
+                        }
+                        else
+                        {
+                            if (Mathf.Abs(
+                                chunk.Density[x, y, z] - beforeDensity[x, y, z]
+                            ) > 0.0001f ||
+                                chunk.Material[x, y, z] !=
+                                beforeMaterial[x, y, z])
+                            {
+                                outsideMismatches++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            Check(
+                insideCount > 0,
+                "Continuous center: shape contains density samples"
+            );
+            Check(
+                formulaMismatches == 0,
+                "Continuous center: d'(p) = min(d(p), s(p))"
+            );
+            Check(
+                outsideMismatches == 0,
+                "Continuous center: outside samples unchanged"
+            );
+            Check(
+                foundChangedSample,
+                "Continuous center: authoritative state changed"
+            );
+            Check(
+                foundNonSentinelValue,
+                "Continuous center: shape-signed values participate, not only -1"
+            );
+        }
+        finally
+        {
+            DestroyTerrain(terrain);
+        }
+    }
+
+    private static void ValidateMiningSmallBrushFallback()
+    {
+        DensityTerrain terrain = CreateTerrain(
+            "Validation_Mining_SmallBrushFallback",
+            DensityGenerationMode.HeightField
+        );
+
+        try
+        {
+            if (!terrain.TryGetChunk(
+                new Vector3Int(0, 0, 0),
+                out TerrainChunk chunk) ||
+                chunk == null)
+            {
+                Check(false, "Small brush: chunk exists");
+                return;
+            }
+
+            Vector3 localCenter = new Vector3(10.37f, 10.82f, 20.14f);
+            Vector3 size = new Vector3(0.2f, 0.2f, 0.2f);
+            CubeModificationShape shape = new CubeModificationShape(size);
+
+            int shapeInsideBefore = 0;
+            for (int x = 0; x < chunk.Density.SampleCountX; x++)
+            {
+                for (int y = 0; y < chunk.Density.SampleCountY; y++)
+                {
+                    for (int z = 0; z < chunk.Density.SampleCountZ; z++)
+                    {
+                        Vector3 samplePosition = chunk.Density.GetLocalPosition(
+                            x,
+                            y,
+                            z
+                        );
+
+                        if (shape.EvaluateSignedValue(
+                            localCenter,
+                            samplePosition) <= 0f)
+                        {
+                            shapeInsideBefore++;
+                        }
+                    }
+                }
+            }
+
+            Check(
+                shapeInsideBefore == 0,
+                "Small brush: normal shape path contains no sample"
+            );
+
+            CaptureChunkData(
+                chunk,
+                out float[,,] beforeDensity,
+                out MaterialType[,,] beforeMaterial
+            );
+
+            int modified = TerrainMining.MineCube(
+                terrain,
+                localCenter,
+                size,
+                rebuild: false
+            );
+
+            Check(
+                modified == 1,
+                "Small brush: fallback modifies exactly one sample"
+            );
+
+            FindNearestSampleBruteForce(
+                chunk.Density,
+                localCenter,
+                out int nearestX,
+                out int nearestY,
+                out int nearestZ
+            );
+
+            Check(
+                Mathf.Abs(
+                    chunk.Density[nearestX, nearestY, nearestZ] -
+                    TerrainMining.AirDensity
+                ) < 0.0001f,
+                "Small brush: nearest sample Density = AirDensity"
+            );
+            Check(
+                chunk.Material[nearestX, nearestY, nearestZ] ==
+                MaterialType.Air,
+                "Small brush: nearest sample Material = Air"
+            );
+
+            int otherSampleMismatches = 0;
+            for (int x = 0; x < chunk.Density.SampleCountX; x++)
+            {
+                for (int y = 0; y < chunk.Density.SampleCountY; y++)
+                {
+                    for (int z = 0; z < chunk.Density.SampleCountZ; z++)
+                    {
+                        if (x == nearestX && y == nearestY && z == nearestZ)
+                        {
+                            continue;
+                        }
+
+                        if (Mathf.Abs(
+                            chunk.Density[x, y, z] - beforeDensity[x, y, z]
+                        ) > 0.0001f ||
+                            chunk.Material[x, y, z] != beforeMaterial[x, y, z])
+                        {
+                            otherSampleMismatches++;
+                        }
+                    }
+                }
+            }
+
+            Check(
+                otherSampleMismatches == 0,
+                "Small brush: all non-fallback samples unchanged"
+            );
+        }
+        finally
+        {
+            DestroyTerrain(terrain);
+        }
+    }
+
+    private static void ValidateMiningAcrossGenerationModes()
+    {
+        ValidateMiningForMode(DensityGenerationMode.ThreeDimensional);
+        ValidateMiningForMode(DensityGenerationMode.SphereCavity);
+    }
+
+    private static void ValidateMiningForMode(DensityGenerationMode mode)
+    {
+        DensityTerrain terrain = CreateTerrain(
+            "Validation_Mining_Mode_" + mode,
+            mode
+        );
+
+        try
+        {
+            if (!terrain.TryGetChunk(
+                new Vector3Int(0, 0, 0),
+                out TerrainChunk chunk) ||
+                chunk == null)
+            {
+                Check(false, mode + ": chunk exists");
+                return;
+            }
+
+            if (!TryFindSolidSample(
+                chunk.Density,
+                out int solidX,
+                out int solidY,
+                out int solidZ))
+            {
+                Check(false, mode + ": found solid sample");
+                return;
+            }
+
+            Vector3 localCenter = chunk.Density.GetLocalPosition(
+                solidX,
+                solidY,
+                solidZ
+            );
+            Vector3 size = new Vector3(3f, 3f, 3f);
+
+            int modified = TerrainMining.MineCube(
+                terrain,
+                localCenter,
+                size,
+                rebuild: false
+            );
+
+            Check(
+                modified > 0,
+                mode + ": mining modifies solid samples"
+            );
+            Check(
+                chunk.Density[solidX, solidY, solidZ] <= 0f,
+                mode + ": mined center sample becomes Air"
+            );
+            Check(
+                chunk.Material[solidX, solidY, solidZ] == MaterialType.Air,
+                mode + ": mined center Material becomes Air"
+            );
+        }
+        finally
+        {
+            DestroyTerrain(terrain);
+        }
+    }
+
+    private static void ValidateMiningFallbackContract()
+    {
+        DensityTerrain terrain = CreateTerrain(
+            "Validation_Mining_FallbackContract",
+            DensityGenerationMode.HeightField
+        );
+
+        try
+        {
+            if (!terrain.TryGetChunk(
+                new Vector3Int(0, 0, 0),
+                out TerrainChunk chunk) ||
+                chunk == null)
+            {
+                Check(false, "Fallback contract: chunk exists");
+                return;
+            }
+
+            Vector3 center = new Vector3(10f, 10f, 10f);
+            Vector3 size = new Vector3(4f, 4f, 4f);
+            CubeModificationShape bigShape = new CubeModificationShape(size);
+            TerrainModificationRequest bigRequest =
+                new TerrainModificationRequest(
+                    bigShape,
+                    center,
+                    TerrainModificationOperation.Subtract,
+                    true
+                );
+
+            // Test 1 / Test 2 / Test 5：相同 Request 执行两次。
+            CaptureChunkData(
+                chunk,
+                out float[,,] stateA,
+                out MaterialType[,,] materialA
+            );
+            int meshIdA = chunk.Mesh.GetInstanceID();
+
+            TerrainModificationResult first =
+                TerrainModification.Apply(terrain, bigRequest);
+
+            CaptureChunkData(
+                chunk,
+                out float[,,] stateB,
+                out MaterialType[,,] materialB
+            );
+            int meshIdB = chunk.Mesh.GetInstanceID();
+
+            Check(
+                first.ModifiedSampleCount > 0,
+                "Fallback T1: first request modifies more than 0 samples"
+            );
+            Check(
+                meshIdB != meshIdA,
+                "Fallback T1: first request rebuilds Mesh"
+            );
+            Check(
+                CountDensityIncreases(stateA, stateB) == 0,
+                "Fallback T2: A -> B density is non-increasing"
+            );
+
+            TerrainModificationResult second =
+                TerrainModification.Apply(terrain, bigRequest);
+
+            CaptureChunkData(
+                chunk,
+                out float[,,] stateC,
+                out MaterialType[,,] materialC
+            );
+            int meshIdC = chunk.Mesh.GetInstanceID();
+
+            Check(
+                second.ModifiedSampleCount == 0,
+                "Fallback T1: second identical request modifies 0 samples"
+            );
+            Check(
+                second.AffectedChunkCount == 0,
+                "Fallback T1: second identical request affects 0 chunks"
+            );
+            Check(
+                CountDensityIncreases(stateB, stateC) == 0,
+                "Fallback T2: B -> C density is non-increasing"
+            );
+            Check(
+                DensityArraysEqual(stateB, stateC),
+                "Fallback T5: B -> C density is unchanged"
+            );
+            Check(
+                meshIdC == meshIdB,
+                "Fallback T5: second identical request does not rebuild Mesh"
+            );
+            Check(
+                !chunk.IsDirty,
+                "Fallback T5: no dirty state after no-change request"
+            );
+
+            // Test 3：Fallback 在 Shape 内没有 Sample 时真正触发。
+            Bounds carvedRegion = new Bounds(
+                center,
+                size * 2f
+            );
+
+            if (!TryFindSolidSampleOutsideBounds(
+                chunk.Density,
+                carvedRegion,
+                out int solidX,
+                out int solidY,
+                out int solidZ))
+            {
+                Check(false, "Fallback T3: found solid sample outside carved region");
+                return;
+            }
+
+            float solidDensityBefore = chunk.Density[solidX, solidY, solidZ];
+            Vector3 solidPosition = chunk.Density.GetLocalPosition(
+                solidX,
+                solidY,
+                solidZ
+            );
+            Vector3 tinySolidCenter = solidPosition +
+                                      new Vector3(0.15f, 0f, 0f);
+            CubeModificationShape tinyShape =
+                new CubeModificationShape(new Vector3(0.2f, 0.2f, 0.2f));
+
+            Check(
+                CountSamplesInsideShape(
+                    chunk.Density,
+                    tinyShape,
+                    tinySolidCenter) == 0,
+                "Fallback T3: tiny brush contains no Density Sample"
+            );
+
+            int meshIdBeforeSolidFallback = chunk.Mesh.GetInstanceID();
+
+            TerrainModificationResult solidFallback =
+                TerrainModification.Apply(
+                    terrain,
+                    new TerrainModificationRequest(
+                        tinyShape,
+                        tinySolidCenter,
+                        TerrainModificationOperation.Subtract,
+                        true
+                    )
+                );
+
+            Check(
+                solidFallback.ModifiedSampleCount == 1,
+                "Fallback T3: fallback modifies exactly one solid sample"
+            );
+            Check(
+                solidFallback.AffectedChunkCount == 1,
+                "Fallback T3: fallback dirty one chunk"
+            );
+            Check(
+                Mathf.Abs(
+                    chunk.Density[solidX, solidY, solidZ] -
+                    TerrainModification.AirDensity
+                ) < 0.0001f,
+                "Fallback T3: solid sample becomes AirDensity"
+            );
+            Check(
+                chunk.Material[solidX, solidY, solidZ] == MaterialType.Air,
+                "Fallback T3: solid sample Material becomes Air"
+            );
+            Check(
+                chunk.Mesh.GetInstanceID() != meshIdBeforeSolidFallback,
+                "Fallback T3: fallback rebuilds Mesh"
+            );
+
+            // Test 4：Fallback 不得覆盖已经有更低 Density 的 Sample。
+            FindNearestSampleBruteForce(
+                chunk.Density,
+                center,
+                out int lowerX,
+                out int lowerY,
+                out int lowerZ
+            );
+
+            float lowerDensityBefore = chunk.Density[lowerX, lowerY, lowerZ];
+            Check(
+                lowerDensityBefore < TerrainModification.AirDensity,
+                "Fallback T4: prepared sample has density lower than AirDensity"
+            );
+
+            Vector3 lowerPosition = chunk.Density.GetLocalPosition(
+                lowerX,
+                lowerY,
+                lowerZ
+            );
+            Vector3 tinyLowerCenter = lowerPosition +
+                                      new Vector3(0.15f, 0f, 0f);
+
+            Check(
+                CountSamplesInsideShape(
+                    chunk.Density,
+                    tinyShape,
+                    tinyLowerCenter) == 0,
+                "Fallback T4: tiny brush contains no Density Sample"
+            );
+
+            int meshIdBeforeLowerFallback = chunk.Mesh.GetInstanceID();
+
+            TerrainModificationResult lowerFallback =
+                TerrainModification.Apply(
+                    terrain,
+                    new TerrainModificationRequest(
+                        tinyShape,
+                        tinyLowerCenter,
+                        TerrainModificationOperation.Subtract,
+                        true
+                    )
+                );
+
+            Check(
+                lowerFallback.ModifiedSampleCount == 0,
+                "Fallback T4: already-lower Density is not counted as modified"
+            );
+            Check(
+                Mathf.Abs(
+                    chunk.Density[lowerX, lowerY, lowerZ] -
+                    lowerDensityBefore
+                ) < 0.0001f,
+                "Fallback T4: already-lower Density stays unchanged"
+            );
+            Check(
+                chunk.Material[lowerX, lowerY, lowerZ] == MaterialType.Air,
+                "Fallback T4: already-air sample Material stays Air"
+            );
+            Check(
+                chunk.Mesh.GetInstanceID() == meshIdBeforeLowerFallback,
+                "Fallback T4: no unnecessary Mesh rebuild"
+            );
+            Check(
+                !chunk.IsDirty,
+                "Fallback T4: no dirty state after no-change fallback"
+            );
+        }
+        finally
+        {
+            DestroyTerrain(terrain);
+        }
+    }
+
+    private static int CountDensityIncreases(
+        float[,,] beforeDensity,
+        float[,,] afterDensity)
+    {
+        int sizeX = afterDensity.GetLength(0);
+        int sizeY = afterDensity.GetLength(1);
+        int sizeZ = afterDensity.GetLength(2);
+        int increases = 0;
+
+        for (int x = 0; x < sizeX; x++)
+        {
+            for (int y = 0; y < sizeY; y++)
+            {
+                for (int z = 0; z < sizeZ; z++)
+                {
+                    if (afterDensity[x, y, z] > beforeDensity[x, y, z] + 0.0001f)
+                    {
+                        increases++;
+                    }
+                }
+            }
+        }
+
+        return increases;
+    }
+
+    private static bool DensityArraysEqual(
+        float[,,] a,
+        float[,,] b)
+    {
+        if (a.GetLength(0) != b.GetLength(0) ||
+            a.GetLength(1) != b.GetLength(1) ||
+            a.GetLength(2) != b.GetLength(2))
+        {
+            return false;
+        }
+
+        for (int x = 0; x < a.GetLength(0); x++)
+        {
+            for (int y = 0; y < a.GetLength(1); y++)
+            {
+                for (int z = 0; z < a.GetLength(2); z++)
+                {
+                    if (Mathf.Abs(a[x, y, z] - b[x, y, z]) > 0.0001f)
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private static int CountSamplesInsideShape(
+        DensityField field,
+        ITerrainModificationShape shape,
+        Vector3 center)
+    {
+        int count = 0;
+
+        for (int x = 0; x < field.SampleCountX; x++)
+        {
+            for (int y = 0; y < field.SampleCountY; y++)
+            {
+                for (int z = 0; z < field.SampleCountZ; z++)
+                {
+                    Vector3 position = field.GetLocalPosition(x, y, z);
+
+                    if (shape.EvaluateSignedValue(center, position) <= 0f)
+                    {
+                        count++;
+                    }
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private static void FindNearestSampleBruteForce(
+        DensityField field,
+        Vector3 localCenter,
+        out int nearestX,
+        out int nearestY,
+        out int nearestZ)
+    {
+        nearestX = 0;
+        nearestY = 0;
+        nearestZ = 0;
+
+        if (field == null) return;
+
+        float bestDistanceSquared = float.MaxValue;
+
+        for (int x = 0; x < field.SampleCountX; x++)
+        {
+            for (int y = 0; y < field.SampleCountY; y++)
+            {
+                for (int z = 0; z < field.SampleCountZ; z++)
+                {
+                    Vector3 samplePosition = field.GetLocalPosition(x, y, z);
+                    float distanceSquared =
+                        (samplePosition - localCenter).sqrMagnitude;
+
+                    if (distanceSquared >= bestDistanceSquared) continue;
+
+                    bestDistanceSquared = distanceSquared;
+                    nearestX = x;
+                    nearestY = y;
+                    nearestZ = z;
+                }
+            }
         }
     }
 
@@ -2069,7 +2763,9 @@ public static class TerrainMultiChunkValidation
 
                     insideCount++;
 
-                    if (Mathf.Abs(density[x, y, z] - TerrainMining.AirDensity) > 0.0001f ||
+                    // Phase 2 Shape-Signed Stamp 会写入不同的负 Shape Signed Value；
+                    // Air 的语义是 density <= 0，而不是固定等于 AirDensity。
+                    if (density[x, y, z] > 0f ||
                         material[x, y, z] != MaterialType.Air)
                     {
                         mismatches++;
