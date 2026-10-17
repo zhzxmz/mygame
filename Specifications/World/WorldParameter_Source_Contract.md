@@ -3,6 +3,16 @@
 > **文档性质**：**来源边界契约规范（Source Boundary Contract）**。本文档冻结 **WorldParameter 各参数的来源边界**：每个参数的**当前实现来源**、**临时性质**、**未来替换方向**、**允许读取对象**与**禁止读取对象**。这里的“当前实现”必须以附录 C 的代码符号和实际实现为准，不表示所有已登记参数均已接入；“Phase 1”如出现在历史登记中，指参数系统早期实现里程碑，而非世界生成 Pipeline 的 Phase 1（World Skeleton Generation）。
 >
 > **维护说明**：本文档定义参数来源边界与依赖方向，不以历史任务的修改范围限制后续维护。文中“Phase 1 临时来源”指参数系统早期实现里程碑中的占位来源登记，不等同于 World Generation Pipeline 的 Phase 1（World Skeleton Generation）。
+
+> **当前实现快照（按代码核对）**：
+> - 求值框架 `WorldParameterEvaluator.Evaluate` 已实现，按固定规则表生成 8 项参数快照；Region Modifier 当前恒为 `0`。
+> - `Elevation` 仍是域哈希占位（高度跨度硬编码为 `128`），**尚未接入** `HeightFunction.GetTerrainHeight`。
+> - `Ocean` 的 `Elevation < SeaLevel` 派生形式已实现，但 `SeaLevel` 仍硬编码为 `64`，且输入 `Elevation` 仍是占位值。
+> - `Temperature` / `Moisture` 仍为域哈希占位；`Fertility` 仍为 `clamp01(Base.Temperature × Base.Moisture)`，尚未读取登记的 `SoilDepth`。
+> - `MagicDensity` / `HolyInfluence` / `CorruptionInfluence` 当前 Base 为 `0`；Region 来源修正尚未接入。
+> - `Continent` / `Slope` 尚未进入这 8 项参数求值表；`WorldSkeletonFacts` 的独立查询接口只覆盖 `Elevation` / `Ocean` / 单大陆退化 `Continent`，尚未接入参数求值器。
+>
+> 此快照描述的是**当前代码事实，不是目标设计**；任何实现变更后必须同步更新本节与附录 C。
 >
 > **本文档不是实现规范**。**不定义**：数值、阈值、噪声公式、派生公式的最终形式；**只定义来源边界与依赖方向**。
 >
