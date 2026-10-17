@@ -13,7 +13,7 @@
 > * **DensityTerrain**：属于独立的 Density/Material + Marching Cubes 地形编辑体系，不由本契约的离散 Voxel Phase 6–8 自动覆盖。
 >
 > **阶段标签规则**：代码注释中的 `World V2 Plan Phase 1.5`、`Phase 3.2`、Geology `Stage A–E` 等属于各子系统的本地开发里程碑，不是本契约的全局 Phase 编号；不得按数字相同或不同推断全局调度顺序。
-> **未决设计门槛（不得由实现 Agent 自行补值）**：非退化多大陆参数与编码仍受 `WorldSkeleton_V1_Minimal_Contract.md` §7 的 `OD-4′` 约束；Region 首次候选生成仍受 `Region_Source_Candidate_Generation_Minimal_Design.md` §8 的 `MS-1`–`MS-4` 约束。未获批准前，只能实现不依赖这些未决语义的部分，并明确报告阻塞项。
+> **未决设计门槛（不得由实现 Agent 自行补值）**：① 非退化多大陆参数与编码受 `WorldSkeleton_V1_Minimal_Contract.md` §7 的 `OD-4′` 约束；② Region 首次候选生成受 `Region_Source_Candidate_Generation_Minimal_Design.md` §8 的 `MS-1`–`MS-4` 约束；③ Region 身份真实空间划分/连续性仍受 `Region_Identity_Determination_Contract.md` §5.2 的 `Q1`–`Q7` 约束。未获批准前，不得自行发明多大陆数值、Region `Kind`/保留码或真实空间分区算法；只能实现不依赖这些未决语义的部分，并明确报告阻塞项。
 >
 > **状态判定规则**：本表只记录已核对代码符号能支持的结论；未确认接线统一标为“尚未确认”，不推断为已实现。代码或测试结果变化后应更新此表。
 > **维护说明**：本文档定义世界生成阶段的调度顺序、依赖方向与数据生命周期；它不因历史任务的修改范围而限制后续实现。实际实现状态应通过代码与验证结果确认。
