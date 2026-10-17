@@ -1,5 +1,10 @@
 \# World Generation Core Specification V1
 
+> **系统适用范围**：本文档约束 `Assets/Scripts/VoxelWorld/Generation/` 的离散 VoxelWorld 生成契约（`Seed + ChunkCoordinate → VoxelChunk`），不是全局 World Generation Pipeline，也不定义 DensityTerrain 的生成方式。
+>
+> 仓库另有以 `DensityField` / `MaterialField` 和 Marching Cubes 为核心的 `DensityTerrain` 体系，其架构入口为 `Specifications/World/Terrain_Editing_Architecture.md`。两套体系目前并存；任何统一或迁移都必须明确指定目标系统、数据权威和兼容方案，不能将本文件的固定 `16³` Chunk 与四种 `VoxelType` 默认套用到 DensityTerrain。
+
+
 
 
 
