@@ -4,7 +4,7 @@
 > 把"世界规则"落到一个可插拔的 `IWorldGenerator` 实现上，并以兼容既有生成契约为目标；本文档不把“新增实现”解释为永久禁止修复既有代码。涉及核心契约的变更必须显式分析兼容性、更新相关规范并执行回归验证。
 >
 > **文档性质**：本文档定义地质规则接入层的实现边界与验收要求；其中原始起草轮次的“本轮只写规范，不写代码”属于历史任务范围，不限制当前开发。具体代码是否已落地必须以当前实现和验证结果为准。
-> 下一阶段按 §13 的清单与顺序落地。
+> 当前代码存在性与接线状态见 §1.4、§13.3；后续维护应先核对现有实现，不得把原始落地清单当作待创建任务。
 >
 > 上游规范：
 > * `Specifications/World/WorldGeneration_Geology.md` —— 地质规则（**规则来源**；本文档只做接入细化）；
@@ -23,21 +23,21 @@
 
 ### 1.1 目标
 
-**新增一个地质生成实现，不替换旧实现。**
+**设计目标：提供一个可选的地质生成实现，与基础生成器并存；不因添加地质能力而无意替换基础生成基线。**
 
 ```
-既有：BasicTerrainGenerator : IWorldGenerator      （Stage 1，保持不变、继续可用、仍是默认）
-新增：GeologyWorldGenerator : IWorldGenerator      （Stage 1 规则 + Cave + Deposit/Biome 接口）
+既有：BasicTerrainGenerator : IWorldGenerator      （基础生成实现）
+可选：GeologyWorldGenerator : IWorldGenerator      （基础规则 + Cave + Deposit/Biome 接口）
 ```
 
-两者**同时存在**、可互换（同一个 `IWorldGenerator` 抽象），由组装点在构造处显式选择：
+两者**同时存在**、可互换（同一个 `IWorldGenerator` 抽象），由组装点在构造处显式选择（以下为示意，构造参数以当前实现签名为准）：
 
 ```csharp
 // 组装点（游戏层）—— 唯一允许 new 具体实现的位置（Runtime_Interface §2.4）
 IWorldGenerator generator =
     useGeology
-        ? new GeologyWorldGenerator(stage1Settings, geologySettings, biomeProvider)  // 新增
-        : new BasicTerrainGenerator(stage1Settings);                                  // 既有，零改动
+        ? new GeologyWorldGenerator(stage1Settings, geologySettings, biomeProvider, depositProvider)
+        : new BasicTerrainGenerator(stage1Settings);
 ```
 
 * 关闭地质特性（Cave/Deposit/Biome 全关）时，`GeologyWorldGenerator` 的输出必须与
@@ -503,7 +503,7 @@ public sealed class GeologyWorldGenerator : IWorldGenerator
 * **方式**：在组装点显式选择 `BasicTerrainGenerator` 或 `GeologyWorldGenerator`；优先保持 `IWorldGenerator` 抽象兼容。具体组装点与接线状态必须以当前代码为准；
 * **兼容边界**：不应为了接入而无必要地改动 Runtime Core / Streaming / Bootstrap；若当前接线确实需要改动，必须说明原因、影响与回归验证，不将原始增量方案解释为永久禁改规则。**既有逻辑**
   （若发现必须修改，说明本规范设计出错，应先改本规范）；
-* **V1 默认**：仍使用 `BasicTerrainGenerator`（不替换旧实现）。
+* **原始方案默认值**：建议使用 `BasicTerrainGenerator` 作为基线；当前项目实际默认值必须以真实组装代码为准，本文档不将其假定为已验证事实。
 
 ---
 
