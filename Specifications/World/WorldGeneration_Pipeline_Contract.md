@@ -4,6 +4,15 @@
 > **阶段顺序 · 输入输出关系 · 数据生命周期 · 依赖方向 · 禁止跨阶段访问**。
 >
 > **范围边界**：本文档描述的是游戏级世界生成架构的目标调度关系，不等同于当前已经接通的运行时调用链；尤其不取代 `VoxelWorld` 的 `IWorldGenerator → VoxelChunk` 生成契约与 Runtime Core，也不取代独立的 `DensityTerrain` 生成/编辑流程。跨体系接线状态必须以对应实现代码和实现状态快照为准。
+
+> **实现状态快照（2026-10-17，静态代码核对；不是运行测试结论）**：
+> * **WorldSkeleton**：`WorldSkeletonFacts.TryEvaluate` 已实现最小查询，但只转发既有高度场、由海平面派生 Ocean，并使用单大陆退化编号；完整大陆/掩码/基础气候带/`Slope` 生成尚未由该入口提供。
+> * **WorldState 参数求值**：`WorldParameterEvaluator` / `WorldParameterRules` 已存在；当前仍有占位来源：Elevation 域哈希、SeaLevel 固定值、Temperature/Moisture 域哈希、Fertility 使用 Temperature×Moisture，MagicDensity/HolyInfluence/CorruptionInfluence 基础值为 0。Region Modifier 在求值器中明确恒为 0，故 Region → FinalState 尚未接通。
+> * **History / Region / Biome**：相关设计规范与部分数据模型存在，但本次核对未确认它们已通过一个统一的 World Generation Pipeline 完整接线。存在数据类型不等于端到端生成已实现。
+> * **Geology / Voxel / Runtime**：离散 `VoxelWorld` 中存在 `BasicTerrainGenerator`、`GeologySampler`、`GeologyWorldGenerator`、`VoxelChunk` 与 `VoxelRuntimeCore`。这是 `IWorldGenerator → VoxelChunk` 的离散生成路径，不代表高层 WorldState / History / Region / Biome 已接入该路径，也不代表 DensityTerrain 已接入。
+> * **DensityTerrain**：属于独立的 Density/Material + Marching Cubes 地形编辑体系，不由本契约的离散 Voxel Phase 6–8 自动覆盖。
+>
+> **状态判定规则**：本表只记录已核对代码符号能支持的结论；未确认接线统一标为“尚未确认”，不推断为已实现。代码或测试结果变化后应更新此表。
 > **维护说明**：本文档定义世界生成阶段的调度顺序、依赖方向与数据生命周期；它不因历史任务的修改范围而限制后续实现。实际实现状态应通过代码与验证结果确认。
 >
 > **核心定位**：
@@ -36,6 +45,8 @@
 > **冲突时的优先级**：**各层规则**以其自身规范为准；**层间顺序与输入封闭**以 `WorldGeneration_Pipeline_Design.md` 为准；
 > **因果方向**以 `WorldState_Design.md` / `Region_Architecture_Contract.md` / `WorldState_Runtime_Contract.md` 为准；
 > **调度契约（阶段编号 · 生命周期 · 依赖方向 · 跨阶段访问禁令）** 以**本文档**为准。
+> **阶段映射（与概念设计一致）**：本文档的 Phase 编号只用于执行调度；概念因果阶段映射见 `WorldGeneration_Pipeline_Design.md` §2.0。关键约束是：History 在 Region 前完成；WorldState Base 可与 History 独立求值；Region 产出 Modifier；FinalState 只能在 Region 完成后定稿。Phase 2 的两段式发布是唯一允许的跨 Phase 定稿例外，不代表 Region 与 WorldState 的因果方向可以互换。
+>
 > **依赖方向优先于编号顺序**：当二者冲突时，以因果方向为准（`PC61`；附录 D ②）。
 >
 > **声明性与维护规则**：本文档本身不产生运行时效果；单独新增、删除或修改本文档不会自动改变体素输出（`PCV11`）。附录 D 用于记录阶段编号或依赖关系的已知差异，不是禁止维护其他规范的规则。若发现上游规范、实现代码与本契约之间存在真实冲突，应定位各自权威范围，按项目架构变更流程修订正确的权威文件，并同步更新相关记录；不得为了保留历史 SHA 而让已确认的错误永久存在。
@@ -239,32 +250,22 @@
 
 ## §3 Dependency Direction Contract
 
-### 3.1 冻结的允许链
+### 3.1 冻结的允许依赖图
 
-```
-Seed
- ↓
-Skeleton
- ↓
-WorldState
- ↓
-Region
- ↓
-Biome
- ↓
-Geology
- ↓
-Voxel
- ↓
-Mesh
- ↓
-Runtime
+> **本节是有分支与合流的 DAG，不是单一路径链。** Seed / 显式配置是确定性上下文；WorldState 有 Base 与 Final 两个定稿点。History 与 WorldState Base 在 Skeleton 之后可以独立求值，Region 必须读取 Skeleton 与 History，FinalState 必须在 RegionModifier 产生后定稿。
+
+```text
+                         ┌→ WorldState Base ─────────────┐
+Seed → WorldSkeleton ────┤                                ├→ WorldState Final → Biome → Geology → Voxel → Mesh → Runtime
+                         └→ History → Region ────────────┘
+                              ↑          │
+                              └─ Skeleton┘
 ```
 
 | # | 规则 |
 |---|---|
-| **PC51** | 上表是**唯一下载链**；允许的读边只能沿该链方向（或读同阶段输入） |
-| **PC52** | **允许边（枚举，共 9 条）**：`Seed→Skeleton`、`Seed→WorldState`、`Seed→Region`、**`Skeleton→Region`（只读；本轮补登记；其产物接口与查询契约的权威见附录 B）**、`Skeleton→WorldState`、`Region→WorldState`（**仅 `RegionModifier`**）、`WorldState→Biome`、`Biome→Geology`（**仅 P3**）、`Geology→Voxel`；以及 `Voxel→Mesh`、`Mesh/Runtime` 的只读消费边 |
+| **PC51** | 上图是核心因果依赖 DAG；允许的读边以 PC52 的白名单与各 Phase 的 Allowed Read 为准。不得把 DAG 误读为每一层只能读取紧邻前一层，也不得添加白名单之外的旁路 |
+| **PC52** | **核心允许边**：`Seed→Skeleton`、`Skeleton→History`、`Skeleton→Region`、`History→Region`、`Skeleton→WorldState Base`、`Region→WorldState Final`（**仅 `RegionModifier`**）、`WorldState Final→Biome`、`Skeleton→Geology`（仅骨架高度/明确保留通道）、`Biome→Geology`（**仅 P3**）、`Geology→Voxel`、`Voxel→Mesh`、`Mesh→Runtime`。Seed / 显式配置作为确定性上下文，可按各 Phase 的 Allowed Read 提供，不代表下游可读取任意上游内部字段 |
 
 ### 3.2 明确禁止（冻结）
 
@@ -284,7 +285,7 @@ Runtime
 |---|---|
 | **PC60** | **泛化禁令**：**任何"下游 → 上游"的读或写边一律禁止**（`PC53`–`PC59` 是实例化） |
 | **PC61** | **依赖方向优先于编号顺序**：当阶段编号与因果方向冲突时（如 Phase 2 与 Phase 3），以**因果方向**为准（附录 D ②） |
-| **PC62** | **禁止跨阶段访问（skip-layer）**：不得跳过中间阶段读取更下游产物（`PA5`） |
+| **PC62** | **输入白名单优先**：阶段只能读取其 Allowed Read 中明确列出的输入；禁止任意旁路读取下游产物或未授权的上游内部字段。允许直接读取的骨架事实、Seed Context 等显式输入不视为缺陷；不得将本条解释为“只能读取编号紧邻的上一阶段” |
 | **PC63** | **禁止回写已完成阶段**：任何阶段不得修改已定稿的上游输出 |
 | **PC64** | **禁止同一规则两处实现**：每层规则只能有一份实现（`WQ1`/`WQ2`；`PG7` 同构） |
 | **PC65** | 禁止"以结果为条件改变输入"（例如"因为检测到体素为空，所以调高魔力"） |
