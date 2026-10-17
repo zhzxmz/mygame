@@ -191,7 +191,7 @@ No epsilon correction or nearest-cell rounding is part of the coordinate contrac
 
 ## 3.4 Voxel, Chunk and Mesh Coordinate Conventions
 
-The following conventions are global and apply to every terrain subsystem.
+The following conventions apply within this DensityTerrain / Terrain Editing architecture. They are not a universal coordinate contract for every terrain subsystem; VoxelWorld has its own `VoxelCoordinate`, fixed 16³ `VoxelChunk`, and world-space contract.
 
 Voxel Coordinate:
 
