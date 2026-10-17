@@ -12,6 +12,8 @@
 > * **Geology / Voxel / Runtime**：离散 `VoxelWorld` 中存在 `BasicTerrainGenerator`、`GeologySampler`、`GeologyWorldGenerator`、`VoxelChunk` 与 `VoxelRuntimeCore`。这是 `IWorldGenerator → VoxelChunk` 的离散生成路径，不代表高层 WorldState / History / Region / Biome 已接入该路径，也不代表 DensityTerrain 已接入。
 > * **DensityTerrain**：属于独立的 Density/Material + Marching Cubes 地形编辑体系，不由本契约的离散 Voxel Phase 6–8 自动覆盖。
 >
+> **阶段标签规则**：代码注释中的 `World V2 Plan Phase 1.5`、`Phase 3.2`、Geology `Stage A–E` 等属于各子系统的本地开发里程碑，不是本契约的全局 Phase 编号；不得按数字相同或不同推断全局调度顺序。
+>
 > **状态判定规则**：本表只记录已核对代码符号能支持的结论；未确认接线统一标为“尚未确认”，不推断为已实现。代码或测试结果变化后应更新此表。
 > **维护说明**：本文档定义世界生成阶段的调度顺序、依赖方向与数据生命周期；它不因历史任务的修改范围而限制后续实现。实际实现状态应通过代码与验证结果确认。
 >
