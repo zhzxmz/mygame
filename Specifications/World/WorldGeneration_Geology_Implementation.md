@@ -73,7 +73,7 @@ IWorldGenerator generator =
 
 ### 1.4 原始计划交付物与当前存在性核对
 
-> 下表原本是实现前的计划清单，不再表示“这些文件尚待创建”。截至 2026-10-17，以下 7 个 Geology 源文件均已在仓库中存在。验证脚本未在原计划路径 `Assets/Editor/GeologyWorldGenerationValidation.cs` 找到，因此其现状标为“未确认”，不能推断 GIV1–GIV9 已经通过当前验证。
+> 下表原本是实现前的计划清单，不再表示“这些文件尚待创建”。截至 2026-10-17，以下 7 个 Geology 源文件均已在仓库中存在。验证脚本的原计划路径 `Assets/Editor/GeologyWorldGenerationValidation.cs` 不存在；仓库实际存在 `Assets/Editor/GeologyStageDValidation.cs`，包含 GW1–GW10 验证。验证脚本的存在不代表测试已通过；本轮未运行 Unity 验证。
 
 | 原计划文件 | 当前代码核对 | 原设计职责 | 命名空间 |
 |---|---|---|---|
@@ -84,7 +84,7 @@ IWorldGenerator generator =
 | `Assets/Scripts/VoxelWorld/Generation/Geology/IDepositProvider.cs` | 已存在 | 矿藏查询抽象 | `VoxelWorld.Generation.Geology` |
 | `Assets/Scripts/VoxelWorld/Generation/Geology/IBiomeProvider.cs` | 已存在 | 群系环境查询抽象 | `VoxelWorld.Generation.Geology` |
 | `Assets/Scripts/VoxelWorld/Generation/Geology/GeologyWorldGenerator.cs` | 已存在 | `IWorldGenerator` 的地质实现 | `VoxelWorld.Generation.Geology` |
-| `Assets/Editor/GeologyWorldGenerationValidation.cs` | 在原计划路径未找到，未确认 | 批处理验证与回归 | — |
+| `Assets/Editor/GeologyWorldGenerationValidation.cs`（原计划路径） | 不存在；实际验证脚本为 `Assets/Editor/GeologyStageDValidation.cs`（已存在，未在本轮运行） | 批处理验证与回归 | — |
 
 ---
 
