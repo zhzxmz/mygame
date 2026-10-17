@@ -333,9 +333,7 @@ public sealed class GeologyWorldGenerator : IWorldGenerator
 
 ## 11. 验证设计（GIV1–GIV9）
 
-> 落地时由**新增**的 `Assets/Editor/GeologyWorldGenerationValidation.cs` 实现（菜单项
-> `Tools/VoxelWorld/Validate Geology Generation` + `-executeMethod`）；
-> 纯 C# 部分不依赖场景与 Unity 对象。
+> **原始验证计划**指定 `Assets/Editor/GeologyWorldGenerationValidation.cs`；当前仓库实际存在的是 `Assets/Editor/GeologyStageDValidation.cs`（覆盖 GW1–GW10）。两套编号/覆盖范围并不自动等价，不能仅凭脚本存在就宣称 GIV1–GIV9 已通过。本轮未运行 Unity 验证；后续应根据实际覆盖范围决定是扩展现有脚本还是补充独立验证入口。纯 C# 采样规则的验证应尽可能不依赖场景与 Unity 对象。
 
 ### GIV1 — 同 Seed 同坐标结果一致
 
