@@ -1,7 +1,7 @@
 # World Parameter Contract V1
 
 > **文档性质**：**参数契约规范（Parameter Contract Specification）**。本文档只定义**跨系统共享参数的契约**：是什么、谁产生、谁拥有最终解释权、谁能读、谁能写、范围与量纲、是否影响 Voxel。
-> **仅创建 Markdown**；**不修改任何代码**；**不创建 `.cs`**；**不创建 class / struct / interface**；**不修改任何已有 `Specifications` 文件**；**不实现任何 Runtime 逻辑**。
+> **维护说明**：本文档定义长期有效的参数身份、语义、来源归属与跨系统读写契约；不以历史任务的修改范围限制后续维护。运行时实现状态以代码和专门的实现状态登记为准。
 >
 > **定位**：Parameter Contract 是**规则之间的数据契约**。
 >
