@@ -1,7 +1,7 @@
 # World History Design Specification V1
 
-> **文档性质**：**设计规范（Design Specification）**。本文档只描述**世界历史的生成规则**（概念 / 数据关系 / 规则 / 约束 / 验收标准）。
-> **仅创建 Markdown**；**不修改任何 `Assets` 文件**；**不创建任何 `.cs`**；**不设计接口 / class / struct**；**不实现任何逻辑**。
+> **文档性质**：**世界历史规则设计规范**。本文档定义 History 的概念、数据关系、生成规则、约束与验收标准；它本身不承担运行时代码实现。
+> 原始起草轮次中“仅创建 Markdown / 不修改 Assets / 不创建代码”的要求只描述当时任务范围，不是当前开发的永久限制。实现应由对应实现任务与规范决定，并遵守本文定义的职责与因果边界。
 >
 > **定位**：History 层位于 **World Skeleton 之后、Region 之前**，是**所有世界状态变化的原因来源**。
 >
@@ -33,7 +33,7 @@
 > |---|---|
 > | `Specifications/World/WorldState_Design.md` | §1.5 倒因为果禁令（C1–C4）、§6 世界历史与遗迹（HR1–HR5）、§6.2 因果链、§6.3 文明偏好、§6.4 遗迹位置规则、§7.3 世界尺度（无限海洋 + 有限大陆） |
 > | `Specifications/World/Region_Design.md` | §6 与历史系统的关系（History Event → Region Source → Region）、§6.4 `HistoryTags` 读取权限（RH1–RH5）、§3 来源规则（RS/RC）、§4.4 属性总表、§7 遗迹候选（RR1–RR7）、§10.3 世界尺度（RW1–RW6） |
-> | `Specifications/World/WorldGeneration_Pipeline_Design.md` | **Phase 2 的唯一定义**：§1.3 输入/输出表、§2.1–§2.4 阶段顺序、§3 域分离（PE1–PE7）、§4 World History 层（PH1–PH5、PI1–PI4、PJ1–PJ5）、附录 B 权限矩阵（B.1）、附录 C 反向依赖（RB-1…RB-14）、附录 D 验收（PG1–PG14） |
+> | `Specifications/World/WorldGeneration_Pipeline_Design.md` | History 的概念因果位置与数据流；执行阶段编号映射见该文档 §2.0 及 `WorldGeneration_Pipeline_Contract.md` 的对应说明；§3 域分离、§4 History 规则、权限矩阵、反向依赖与验收 |
 > | `Specifications/World/Ecology_Design.md` | §7.2 Region Tags 白名单（`HistoryTags` 允许被资格层读取）、附录 C `EB-7`（禁止 Ecology → History） |
 > | `Specifications/World/WorldGeneration_Geology*.md` | 地形/岩层/洞穴/材料/资源存在性（`DepositZone`）的唯一权威；**晶簇等对象属 Entity**（ADR-001）；§6.1 群系只影响地表材料 |
 > | `Specifications/World/VoxelWorld_Core.md`、`WorldGeneration_Core.md`、`VoxelWorld_Runtime*.md`、`VoxelWorld_Mesh.md`、`VoxelWorld_View.md`、`VoxelWorld_Mining.md`、`VoxelWorld_Architecture.md`、`ADR-001` | 真值、生成契约、下游消费者与概念边界（本文档不定义它们的行为） |
