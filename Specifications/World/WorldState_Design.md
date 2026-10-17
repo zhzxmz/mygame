@@ -29,7 +29,13 @@
 >
 > **V1 状态**：本文档定义环境参数与世界状态的设计规则，不直接实现代码或生成世界数据。运行时接线状态应查看 `Specifications/World/WorldParameter_Source_Contract.md` 的实现对应表及当前代码。
 
-> **架构冲突提醒（必须先处理）**：本文件的早期上游列表引用 `VoxelWorld_Core.md`，其中冻结了离散 `Air/Grass/Dirt/Stone` 类型；而 `WorldGeneration_Geology.md` 使用连续 `Density` / `Material` 规则。两套表示不能未经解释就同时作为同一地形实现的最高权威。涉及地形真值、材料表示或 Voxel 输出的实现任务，必须先核对当前地形代码和对应实现契约；不得仅凭本文件旧上游列表恢复离散类型假设。旧 `VoxelWorld_Architecture.md` 已标记为历史概念文档，当前地形高层架构入口为 `Specifications/World/Terrain_Editing_Architecture.md`。
+> **跨系统边界提醒**：仓库目前有两套不同的地形实现路径，不应把它们当作同一套数据模型内部互相冲突的规则：
+> * **VoxelWorld**：`VoxelChunk` 保存离散 `Air/Grass/Dirt/Stone`；`WorldGeneration_Geology.md` 的连续世界坐标函数是用于判定这些离散体素的规则层，输出仍是 `VoxelChunk`。
+> * **DensityTerrain**：以 `DensityField` / `MaterialField` 为地形采样与材料数据，Marching Cubes 网格为派生表示；挖掘编辑状态遵循 `Terrain_Editing_Architecture.md`。
+>
+> 两套体系都可以使用世界坐标和确定性生成，但它们的真值载体、材料表示、Chunk 契约与编辑流程并不相同。涉及具体地形任务时，必须先确认目标体系，再读取对应规范；不得将 VoxelWorld 的固定 `16³` Chunk / 四值 `VoxelType` 契约强加给 DensityTerrain，也不得把 DensityTerrain 的密度场编辑规则套入 VoxelWorld。若未来决定合并，必须先制定并批准迁移方案。
+>
+> `Specifications/World/Terrain_Editing_Architecture.md` 是 DensityTerrain 的架构入口，不代表它自动取代 VoxelWorld 体系。
 
 ---
 
