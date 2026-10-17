@@ -1,11 +1,10 @@
 # World Generation Pipeline Design Specification V1
 
-> **文档性质**：**设计规范（Design Specification）**。本文档只描述 **世界生成的数据流与职责边界**。
-> **不创建任何 `.cs`**；**不修改任何已有文件**；**不定义接口 / class / struct / 代码草案**；
-> **不涉及 Runtime / Chunk / Mesh / Entity 的实现**；不实现任何生成逻辑。
+> **文档性质**：**世界生成概念架构与因果数据流设计规范**。本文档定义各世界层的职责、输入输出与因果依赖，不定义具体 C# 接口或运行时调度实现。
 >
-> **定位**：本文档是**层间数据流与阶段顺序的唯一权威**：它规定"谁在什么时候读到什么、产出什么、绝不能读什么"。
-> 各层**内部**的规则仍由各自的规范拥有（本文档只做调用顺序与边界约束，不重新定义规则）。
+> **权威范围**：本文档拥有概念层的因果关系与层间数据流解释权；各层内部规则仍由对应系统规范拥有。具体执行阶段编号、数据生命周期、权限矩阵与调度验收由 `WorldGeneration_Pipeline_Contract.md` 细化。两份文件必须按 §2.0 的阶段映射共同解释，不能直接比较两份文档中相同数字的 Phase。
+>
+> 原始起草轮次中的“不创建代码 / 不修改既有文件”等限制只描述当时任务范围，不是当前开发的永久限制。本文档本身仍是声明性设计，不会自动产生运行时效果。
 >
 > **必须兼容的既有规范**：
 >
@@ -19,9 +18,10 @@
 > | `Specifications/World/WorldGeneration_Core.md`、`VoxelWorld_Core.md` | 生成契约（`Seed + ChunkCoordinate → VoxelChunk`、确定性、Chunk 计算独立）与世界真值（体素状态集合冻结） |
 > | `Specifications/World/VoxelWorld_Mesh.md`、`VoxelWorld_View.md`、`VoxelWorld_Mining.md`、`VoxelWorld_Runtime*.md`、`VoxelWorld_Architecture.md`、`ADR-001` | 下游消费者与概念边界（本文档不定义它们的行为） |
 >
-> **冲突时的优先级**：**真值**以 `VoxelWorld_Core.md` 为准；**生成契约**以 `WorldGeneration_Core.md` 为准；
-> **地形/岩层/洞穴/材料**以 `WorldGeneration_Geology*.md` 为准；**环境参数与力量规则**以 `WorldState_Design.md` 为准；
-> **区域的来源/修正/标签/资格**以 `Region_Design.md` 为准；**层间顺序与数据流**以**本文档**为准。
+> **权威分工**：**真值**以 `VoxelWorld_Core.md` 为准；**离散 VoxelWorld 生成契约**以 `WorldGeneration_Core.md` 为准；
+> **地形/岩层/洞穴/材料规则**以对应 Geology 规范为准；**环境参数语义**以 `WorldState_Design.md` 为准；
+> **区域来源/修正/标签/资格**以 Region 规范为准；**概念层因果关系与层间数据流**以本文档为准；
+> **执行阶段编号、生命周期、调度权限与验收**以 `WorldGeneration_Pipeline_Contract.md` 为准。
 >
 > **范围声明（硬性）**：本文档中出现的 `Voxel Output` 指"**世界坐标 → 体素状态**"这一**纯函数结果**（即世界真值），
 > **不是** Chunk 容器、不是加载单位、不是 Mesh；Chunk 的划分与调度属于 Runtime/Streaming（完全不在本文档范围）。
@@ -123,6 +123,22 @@ World
 ---
 
 ## §2 Generation Phase 顺序
+
+> **§2.0 阶段编号映射（必须遵守）**：本文档的 Phase 0–7 是概念架构的历史编号；`WorldGeneration_Pipeline_Contract.md` 的 Phase 0–8 是细化后的执行调度编号。它们不是同一个编号命名空间。因果顺序不变，映射如下：
+
+| 本文档概念阶段 | 执行契约中的对应位置 | 说明 |
+|---|---|---|
+| Phase 0 Seed | Contract Phase 0 | 同一阶段 |
+| Phase 1 World Skeleton | Contract Phase 1 | 提供大尺度舞台事实 |
+| Phase 2 History | Contract Phase 2 的 History 预备分支（与 WorldState Base 独立） | History 必须在 Region 之前完成；不属于 WorldState 输入 |
+| Phase 3 Region | Contract Phase 3 | 消费 Skeleton 与 History，产出 Region Context / RegionModifier |
+| Phase 4 WorldState | Contract Phase 2 的 FinalState 定稿点（在 Contract Phase 3 完成后） | WorldState 采用两段式发布：Base 可提前定稿，FinalState 必须等待 RegionModifier |
+| Phase 5 Biome | Contract Phase 4 | 只读取定稿后的 FinalState |
+| Phase 6 Geology | Contract Phase 5 | 只在允许的通道读取 Biome；并读取世界坐标/骨架高度框架 |
+| Phase 7 Voxel Output | Contract Phase 6 | 将地质解释抽样为离散体素真值 |
+| 不在本文档范围 | Contract Phase 7 Mesh / Phase 8 Runtime | Mesh 是体素数据的派生表示；Runtime 是消费与生命周期调度，不属于本文档定义的世界生成因果链 |
+
+> **执行解释**：Contract Phase 2 是一个跨 Region 前后两个定稿点的逻辑阶段，不表示 FinalState 可以在 Region 之前定稿。History 与 WorldState Base 可以在 Skeleton 之后独立求值；Region 消费 History 与 Skeleton；WorldState 再用 RegionModifier 定稿 FinalState。若实现无法表达这一顺序，应先修正调度实现/契约，不得倒置因果关系。
 
 ### 2.1 阶段定义
 
