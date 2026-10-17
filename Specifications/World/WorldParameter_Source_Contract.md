@@ -269,7 +269,7 @@ Biome / Geology / Resource / Ecology
 |---|---|---|---|---|
 | **WPS55** | `Elevation` 占位高度跨度 `128` | 硬编码常量 | **非登记值**（`WorldHeight` 的真实来源是 `WorldGenerationSettings`） | 读取 `WorldGenerationSettings.WorldHeight`；占位常量删除 |
 | **WPS56** | `SeaLevel` 占位值 `64` | 硬编码常量 | **登记默认值**（契约表 C `SeaLevel` 默认 `64`） | 改为显式配置读取（值本身可不变） |
-| **WPS57** | `Elevation` 使用**域 1**（`Skeleton`）标签 | 硬编码常量 | **契约 §6.4 覆盖清单未含 `Elevation`**（真实 `Elevation` 是转发量、不需要域） | **终态**：`Elevation` 改为只读转发后**移除**域标签；**§6.4 登记不变**（**不得**把"把 `Elevation` 加入域 1 覆盖清单"当作终态方案）。**本轮只更新计划与契约状态；未修改实现** |
+| **WPS57** | `Elevation` 使用**域 1**（`Skeleton`）标签 | 硬编码常量 | **契约 §6.4 覆盖清单未含 `Elevation`**（真实 `Elevation` 是转发量、不需要域） | **终态**：`Elevation` 改为只读转发后**移除**域标签；**§6.4 登记不变**（**不得**把"把 `Elevation` 加入域 1 覆盖清单"当作终态方案）。**该条记录对应的历史轮次仅更新计划与契约状态，未修改实现** |
 | **WPS58** | `Modifier` 以 `0` 承载（含 `Elevation`/`Ocean`） | 表示形态 | **登记缺口**：`PM32` 要求转发/派生参数的 `Modifier` 表示为 **`None`**（非"修正 0"），`WSC10` 要求其不进入任何求和式 | 表示法决策属后续轮次（`B-3` 类登记）；本文档**不裁决** |
 
 ### 5.3 替换纪律
