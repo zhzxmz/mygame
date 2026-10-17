@@ -114,7 +114,7 @@
 | **PC17** | 骨架**不得**读取 History/Region/Biome/Geology 的任何结论（无反向、无旁路） |
 | **PC18** | 骨架输出必须是世界坐标的纯函数（同 Seed + 坐标 ⇒ 同骨架，与加载顺序无关） |
 
-### Phase 2 — World Parameter Evaluation
+### Phase 2 — Base Evaluation + History Preparation
 
 > **Phase 2 的双分支解释**：本编号阶段包含两条相互独立的预备工作流：
 > * **WorldState Base**：只依赖 Seed Context、WorldSkeleton 与显式参数配置；不得读取 History。
@@ -476,7 +476,7 @@ Phase 0  Seed Initialization        → Seed Context
    ↓
 Phase 1  World Skeleton Generation  → WorldSkeleton（舞台框架）
    ↓
-Phase 2  World Parameter Evaluation → WorldParameter Base ──┐
+Phase 2  Base Evaluation + History Preparation → WorldParameter Base ──┐
    ↓                                                          │（第二段：Phase 3 之后定稿）
 Phase 3  Region Evaluation          → Region Context（含 RegionModifier）
    │                                      └──► 合成 ──────────┘
@@ -493,7 +493,7 @@ Phase 7  Mesh Construction           → Render Mesh（只读派生）
    ↓
 Phase 8  Runtime Activation          → Runtime Entity / Interaction
 
-  History（既有 Phase 2）──► Region Source 候选（只读）──► Phase 3 输入     [附录 D ①]
+  Phase 2 History Preparation（并行分支）──► HistoryTags + Region Source 候选 ──► Phase 3 输入
 
   ═══ 禁止：Runtime/Player/Entity → Generation（PC53–PC55）
              Voxel → Geology（PC56）· Mesh → Generation（PC57）
@@ -506,7 +506,7 @@ Phase 8  Runtime Activation          → Runtime Entity / Interaction
 |---|---|---|---|
 | P0 Seed Initialization | Seed Context | World Lifetime | `WorldGeneration_Core.md` §3 + `WorldParameter_Contract.md` §6.4 |
 | P1 World Skeleton | WorldSkeleton | World Lifetime | **规则**（大陆/掩码/退化）：`WorldState_Design.md` §7.4（`WC1`–`WC6`）；**产物接口与查询契约**：`WorldSkeleton_V1_Minimal_Contract.md` |
-| P2 World Parameter | WorldParameter FinalState | World Lifetime | `WorldState_Design.md` + `WorldState_Runtime_Contract.md`（合成权） |
+| P2 Base + History Preparation | `WorldParameterBase`；`HistoryTags` + Region Source 候选（两条独立分支） | World Lifetime / Generation Lifetime | Base：`WorldState_Design.md` + `WorldState_Runtime_Contract.md`；History：`WorldGeneration_Pipeline_Design.md` §4 + `WorldHistory_Design.md` |
 | P3 Region | Region Context（含 `RegionModifier`） | Region Lifetime | `Region_Design.md` + `Region_Architecture_Contract.md` |
 | P4 Biome | Biome Identity | Point Evaluation | `WorldState_Design.md` §5.3 + `Biome_Architecture_Contract.md` |
 | P5 Geology | Geology State | Point Evaluation | `WorldGeneration_Geology*.md` + `Geology_Architecture_Contract.md` |
