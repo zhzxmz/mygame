@@ -474,7 +474,7 @@ View                     VoxelMeshData → Unity 表示（唯一允许 Unity 类
 | **GE8** | **洞穴只改 Density**：洞穴开启/关闭只造成 Solid→Empty 的变化，不改变其它体素的材料 | 差异集合 ⊆ {Stone/Dirt/Grass → Air} |
 | **GE9** | **矿藏只在实体内**：`DepositZone ≠ None` 的坐标必须是实体 | 全量查询比对 |
 | **GE10** | **Entity 边界**：生成过程不产生任何 Entity、不写非体素的资源标记 | 结构性检查（生成接口不出现 Entity 类型 / 无资源体素写入） |
-| **GE11** | **不改既有实现**：VoxelCore / WorldGeneration / Mesh / View / Runtime / Streaming / Bootstrap 的 SHA 不变 | 文件哈希比对（既有验证入口做法） |
+| **GE11** | **既有系统兼容性**：优先保持 VoxelCore / WorldGeneration / Mesh / View / Runtime / Streaming / Bootstrap 的既有行为；未授权修改时应保持对应 SHA 不变，若明确授权修改则更新基线并验证逐体素兼容、确定性与运行时不变量 | 按任务变更范围进行哈希与回归检查 |
 | **GE12** | **确定性证据**：同 Seed + 坐标 ⇒ 体素快照与派生 Mesh 内容哈希完全一致 | `ComputeContentHash()` 比较 |
 
 ---
