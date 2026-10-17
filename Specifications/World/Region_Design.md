@@ -18,8 +18,7 @@
 > **地形/岩层/洞穴/材料**以 `WorldGeneration_Geology*.md` 为准；**环境参数与力量规则**以 `WorldState_Design.md` 为准；
 > **调度**以 `VoxelWorld_Runtime*.md` 为准；**区域的来源/修正/标签/资格**以本文档为准。
 >
-> **零修改前提（硬性）**：本文档的一切内容都必须能在**不修改** VoxelCore、Geology 实现（含被冻结的 9 个地质文件）、
-> WorldGeneration 既有实现、Mesh、View、Runtime Core、Streaming、Bootstrap 的前提下落地为**新增层 / 新增文件**。
+> **兼容性目标（不是永久禁改规则）**：Region 应通过明确的数据契约与既有系统协作，优先避免不必要地改写 VoxelCore、Geology、WorldGeneration、Mesh、View、Runtime Core、Streaming 与 Bootstrap。原始设计轮次采用“新增层 / 新增文件”作为兼容策略；若实际实现或修复需要触及既有代码，应说明跨系统影响并同步更新规范与回归验证。
 >
 > **V1 状态**：仅设计（§11）。本文档不产生任何代码、不生成任何世界数据、不改变任何既有行为。
 
@@ -677,11 +676,11 @@ Region → FinalState（环境参数） → 既有群系解析（Geology 侧，�
 | **RI3** | 若 Region 层被关闭，世界必须与今天**逐体素一致**（退化兼容，`RG10`） |
 | **RI4** | 任何其它路径（例如"Region 直接改材料/加方块"）**一律禁止** |
 
-### 12.5 机械可验证的零修改纪律
+### 12.5 兼容基线与变更控制
 
 | # | 纪律 |
 |---|---|
-| **RV9** | VoxelCore / WorldGeneration 既有实现 / Geology 9 个实现文件 / Runtime（Core+Streaming）/ Mesh / View / Bootstrap 的 SHA256 必须保持不变（沿用既有验证入口的 SHA 比对做法） |
+| **RV9（历史验收基线）** | 原始 Region 设计轮次要求 VoxelCore / WorldGeneration / Geology 9 个实现文件 / Runtime / Mesh / View / Bootstrap 的 SHA256 不变；该要求只记录当轮验收基线，不是永久禁改。当前任务若允许修改这些文件，应更新对应基线并执行回归验证 |
 | **RV10** | 若未来落地时**必须**触及被 SHA 冻结的文件，必须作为**一次显式授权的变更**，并**级联重钉**相关验证入口的哈希（与既有 Stage A–E 的纪律一致） |
 
 ---
@@ -765,7 +764,7 @@ World
 | **RG10** | **退化兼容**：关闭 Region 层 ⇒ 世界与今天逐体素一致 | 与既有基线（Stage 1 / Stage C / Stage D 输出）逐体素 + 内容哈希比较 |
 | **RG11** | **地形不变**：Region 不影响 `Density` / `Material`（除唯一间接路径）/ `CaveDensity` | 开关 Region 前后体素快照比较（差异集合 ⊆ 允许集合） |
 | **RG12** | **无新增体素类型**：不引入任何 `VoxelType` | 结构性检查（类型集合冻结） |
-| **RG13** | **零修改**：VoxelCore / Generation / Geology / Runtime / Mesh / View / Bootstrap 的 SHA 不变 | 文件哈希比对（`RV9`） |
+| **RG13** | **兼容基线检查**：若当前任务未授权修改冻结范围，则对应文件 SHA 应不变；若任务明确授权并完成影响审查，则更新基线并验证受影响行为 | 按任务变更范围进行文件哈希与回归检查（历史基线见 `RV9`） |
 | **RG14** | **Chunk 无关性**：Region 影响与 Chunk 划分、加载顺序、帧序无关 | 跨 Chunk 边界连续性 + 不同加载顺序对照 |
 | **RGV** | **可解释性**：任意 Region / 遗迹候选都能完整回溯"来源 → 修正 → 参数 → 分类"链 | 判定链问答（沿用 `WorldState_Design.md` 附录 C 的形式） |
 | **RGS** | **不生成对象**：Region 层不产生 Chunk / Mesh / Entity / 结构 / 植被 | 结构性检查（产出只有修正、标签、资格） |
@@ -793,7 +792,7 @@ World
 | 15 | `ADR-001`（World / Space / Entity） | Region 可能被当作对象/容器 | Region 不是 Entity、不是 Chunk、不是 Space 数据；遗迹/资源/生物的对象化归未来 Entity / Structure 系统；Region 只产出只读资格（`RR3`/`RGS`） | **否** |
 | 16 | 既有被 SHA 冻结的实现文件 | 落地时可能需要修改它们 | `RV9`/`RV10`：优先零修改（新增文件）；若必须改动，走显式授权 + 级联重钉 | **否**（纪律条款） |
 
-**结论**：本文档只**新增解释层**，不修改任何既有契约、不引入第二套权威；
+**结论**：本文档定义 Region 的解释与规则边界，不引入第二套权威；原始方案优先采用增量实现，但并不永久禁止在必要时维护既有契约；
 与 `WorldState_Design.md` 的**唯一实质接触点**是术语（第 3 项），已通过 `RT1`–`RT6` 完全对齐；**与已有规范无冲突**。
 
 ---
