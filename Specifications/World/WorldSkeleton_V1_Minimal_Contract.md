@@ -4,7 +4,7 @@
 >
 > **生效状态**：§1.1 为**已批准**（架构方向 + 本轮批准决定）；§1.2 为**本文提案，尚待批准**；§1.3 为**代码事实**；§1.4 为**未实现项**。
 >
-> **本轮范围**：只修订文档；**未修改**任何 `.cs` / `.meta` / 场景 / Prefab；**未实现** WorldSkeleton、Region 候选生成或任何新运行时接口；**未修改** `WorldParameterEvaluator`、Region 现运行时代码、Legacy Terrain。
+> **当前实现状态**：`WorldSkeletonFacts.TryEvaluate` 最小查询接口已实现并通过 Unity 项目编译；它只提供既有高度场、海平面派生海洋与单大陆退化编号，不代表完整 WorldSkeleton 生成层已实现。大陆/掩码/气候带/`Slope` 生成及 Region 对骨架的实际消费仍属缺口。
 
 ---
 
@@ -19,7 +19,7 @@
 | **A-3** | **Terrain** 负责具体地形几何及其表现 |
 | **A-4** | **Magic、WorldHistory / WorldEvent、Resource、Ecology** 保持各自职责，通过明确的数据契约协作 |
 | **A-5** | WorldSkeleton **不承担**所有下游系统的业务逻辑，**不得**读取 Region 的输出形成循环依赖 |
-| **A-6** | 当前**没有** WorldSkeleton 运行时代码；**不得**声称已实现 |
+| **A-6** | `WorldSkeletonFacts` **最小查询接口已实现**；完整 WorldSkeleton 生成层（大陆/掩码/基础气候带/`Slope`）仍未实现；**不得将查询接口误称为完整生成层已实现** |
 | **A-7** | 本文档（`WorldSkeleton_V1_Minimal_Contract.md`）作为 **WorldSkeleton V1 的产物接口与查询契约** |
 | **A-8** | `WorldGeneration_Pipeline_Contract.md` 继续作为**阶段调度、生命周期、依赖方向与阶段输入面的权威契约**；`WorldState_Design.md` §7.4 继续作为**大陆、掩码及相关退化规则的权威来源**（本轮未修改该文件） |
 | **A-9** | **`Skeleton → Region` 是已批准的上游只读依赖**（不是待决架构问题）；登记缺陷已在 `PC52` 补正 |
