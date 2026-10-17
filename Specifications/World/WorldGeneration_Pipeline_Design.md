@@ -753,8 +753,7 @@ Pipeline（本文档）
 
 ## 附录 D：未来实现阶段建议
 
-> 本附录只给**建议顺序与共同硬性检查**，本轮不实现任何一项。
-> 落地必须另立实现规范（本文档不给出任何类型/接口/参数结构草案）。
+> 本附录保留原始的**建议落地顺序与共同检查**，不代表当前实现状态，也不是当前任务清单。实现状态以 `WorldGeneration_Pipeline_Contract.md` 的代码核对快照为准；后续实现应按具体任务补充或更新实现规范。
 
 ### D.1 阶段建议（与 §11.1 的四步对应）
 
@@ -763,7 +762,7 @@ Pipeline（本文档）
 | **PG-A** | WorldState 参数层（Base 5 参数 + 派生 `Ocean`/`Fertility`） | 1 | `Elevation` 复用既有高度场；修正可为 0；可关闭 |
 | **PG-B** | Region 查询层（Source + Modifier → `FinalState`） | 2 | 无源不成区；交换律；可局部枚举；类型无规则权 |
 | **PG-C** | Biome 解析（复用唯一规则表） | 3 | 不新增第二套规则；可关闭 ⇒ 退化一致 |
-| **PG-D** | Geology 接入（既有 P3 地表材料路径） | 4 | 只影响地表层材料；不改 `Density`/`Cave`；零修改 |
+| **PG-D** | Geology 接入（既有 P3 地表材料路径） | 4 | 只影响地表层材料；不改 `Density`/`Cave`；优先保持既有基线，必要变更需明确授权与回归验证 |
 | **PG-E** | History 事实层（HistoryTags / Source 候选） | 前置（可最小化） | 只产出事实与候选；不生成对象；不推进时间 |
 | **PG-F** | 大陆骨架（Phase 1，可选，最后） | 可选 | 掩码叠加；可退化为全陆地；不引入硬边界 |
 
@@ -785,14 +784,14 @@ Pipeline（本文档）
 | **PG9** | **地形不变**：Region / 群系 / 历史不影响 `Density` / `CaveDensity`（群系仅影响 P3 地表材料） | 开关前后的体素快照差异集合 ⊆ 允许集合（仅地表层材料） |
 | **PG10** | **唯一地表材料路径**：影响体素的路径仅 `FinalState → 群系 → P3 地表材料` | 结构扫描 + 差异集合检查 |
 | **PG11** | **无新增 VoxelType**：不引入任何体素状态 | 结构性检查（类型集合冻结） |
-| **PG12** | **零修改**：VoxelCore / WorldGeneration / Geology 9 个实现文件 / Runtime / Streaming / Mesh / View / Bootstrap 的 SHA 不变 | 文件哈希比对（既有验证入口做法） |
+| **PG12（历史验收基线）** | 原始接入轮次要求 VoxelCore / WorldGeneration / Geology 9 个实现文件 / Runtime / Streaming / Mesh / View / Bootstrap 的 SHA 不变；这不是永久禁改规则。若当前任务明确授权修改，需更新基线并验证兼容性 | 按任务变更范围做哈希与回归检查 |
 | **PG13** | **可解释性**：任意坐标的结论都能回溯完整判定链（附录 A.2） | 判定链问答 + 结构扫描（无孤立分支） |
 | **PG14** | **无反向依赖**：附录 C 的 RB-1…RB-14 全部成立 | 结构扫描（反向读取路径为 0） |
 
 ### D.3 每阶段的共同硬性检查
 
 1. 既有验收套件（VoxelCore / WorldGeneration / Mesh / View / RuntimeCore / Streaming / Geology Stage A–E）全部保持 PASS；
-2. `PG12` 的 SHA 冻结集合不变；若必须改动被冻结文件，走**显式授权 + 级联重钉**流程；
+2. 若当前任务未授权修改历史冻结集合，则相关 SHA 应不变；若明确授权修改，则说明理由、更新基线并执行回归验证（历史基线见 `PG12`）；
 3. 不使用任何非确定性来源（`PD4`）；
 4. 不新增 `VoxelType`、不修改 VoxelCore（`PR3`）；
 5. 每阶段都必须**可关闭**，且关闭后逐体素退回既有行为（`PG8`）。
