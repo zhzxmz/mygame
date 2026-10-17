@@ -444,12 +444,12 @@ Runtime
 | **PCV15** | **生命周期隔离**：Generation 数据不依赖 Runtime 生命周期；短生命周期结束不改变结果 | 结构扫描 + 卸载后重算对照（`PC72`–`PC75`） |
 | **PCV16** | **无第二套规则**：每层规则只有一份实现（含参数、群系、地质判定、资源判定） | 结构扫描（重复阈值/规则表 = 0） |
 
-### 10.4 零修改与矩阵
+### 10.4 参数/类型边界与矩阵
 
 | # | 不变量 | 验证方法 |
 |---|---|---|
 | **PCV17** | **无新增参数 / 无新增 `VoxelType`** | 参数集合比对 + 类型集合比对（`PC36`） |
-| **PCV18** | **零修改**：既有实现与既有规范 SHA 不变；既有 12 项验证保持 PASS | 文件哈希比对 + 既有验证套件 |
+| **PCV18** | **历史验收记录（非永久禁令）**：原始起草任务要求当轮既有实现/规范 SHA 不变，并运行当时的 12 项验证；该要求只描述当轮验收，不禁止后续按架构变更流程维护规范或实现 | 查阅原始任务记录；当前改动按对应测试/验证结果报告 |
 | **PCV19** | **矩阵自查全过**：`PC105`–`PC114` 全部满足 | 矩阵解析与结构扫描 |
 | **PCV20** | **编号与依赖一致性**：阶段编号顺序与因果方向冲突处，必须有显式调和规则且不改变因果方向（附录 D ②） | 依赖图 + 调和规则审查 |
 
@@ -523,11 +523,11 @@ Phase 8  Runtime Activation          → Runtime Entity / Interaction
 
 ## 附录 D：与既有规范的对齐登记与变更规则
 
-### D.1 登记项（**本文档不修改任何既有文件**）
+### D.1 已知差异登记（用于追踪，**不构成禁止维护其他规范的规则**）
 
 | # | 需对齐内容 | 位置 | 真相（按本契约） |
 |---|---|---|---|
-| ① | **History 阶段**：任务书给定的 Phase 列表（Phase 0–8）**不含 History**，而既有 `WorldGeneration_Pipeline_Design.md` §2.1 有 **Phase 2 = History Generation** | 任务书（本次指令）§2；`WorldGeneration_Pipeline_Design.md`:133；`WorldHistory_Design.md` §1.3/`PI1` | History 的**因果关系不变**（`History → Region Source 候选 → Region`）；在本契约中它作为 **Phase 3 的输入**出现（`PC26`）。**编号差异已登记，不修改既有文件** |
+| ① | **History 阶段**：任务书给定的 Phase 列表（Phase 0–8）**不含 History**，而既有 `WorldGeneration_Pipeline_Design.md` §2.1 有 **Phase 2 = History Generation** | 任务书（本次指令）§2；`WorldGeneration_Pipeline_Design.md`:133；`WorldHistory_Design.md` §1.3/`PI1` | History 的**因果关系不变**（`History → Region Source 候选 → Region`）；在本契约中它作为 **Phase 3 的输入**出现（`PC26`）。**编号差异已登记，待按权威层级协调** |
 | ② | **WorldState 与 Region 的先后**：任务书 §2/§3 把 **WorldState（Phase 2）写在 Region（Phase 3）之前**，而既有因果方向是 `Region → RegionModifier → WorldState FinalState` | 任务书 §2/§3；`WorldState_Design.md` §2.1；`RA75`/`RA76`；`WSC19`（`FinalState = clamp01(Base + RegionModifier)`） | **依赖方向优先**（`PC61`）：Phase 2 采用**两段式发布**（`PC19`）——`Base` 先定稿，`FinalState` 在 Phase 3 之后定稿；**因果方向未被改变**（Region 仍是 Modifier 的唯一写入者） |
 | ③ | **Phase 7 Mesh / Phase 8 Runtime**：既有 `Pipeline_Design` 的 Phase 集合到 **Phase 7 = Voxel Output** 为终点（Mesh/Runtime 不在管线内） | 任务书 §2；`WorldGeneration_Pipeline_Design.md`:138；`VoxelWorld_Mesh.md`（只读派生）；`VoxelWorld_Runtime*.md` | 本契约把 **Mesh Construction（P7）** 与 **Runtime Activation（P8）** 纳入调度契约，但保持其既有性质：**Mesh = 只读派生**（`PC39`）、**Runtime = 只调度不回写**（`PC43`） |
 | ④ | **Phase 6 Voxel Evaluation 与既有 Phase 7 Voxel Output** | 任务书 §2；`Pipeline_Design` §2.1 Phase 7；`GC50`（既有 `GeologyWorldGenerator.Generate` 返回 `VoxelChunk` 属 Phase 7 落地形态） | 同一件事的**改名与分层**：本契约的 Phase 6 承担"抽样 + 写入动作"，Geology（Phase 5）只提供判定（`PC35`） |
@@ -538,6 +538,6 @@ Phase 8  Runtime Activation          → Runtime Entity / Interaction
 
 1. 修改阶段集合/编号、依赖方向、生命周期或权限矩阵，**必须**升版本并同步更新 §2/§3/§4/§8 与附录 A/B。
 2. **不得放宽**：`PC2`–`PC4`（定位）、`PC6`（不拥有规则）、`PC47`–`PC50`（顺序与定稿点）、`PC53`–`PC60`（反向边禁令）、`PC73`（Generation 不依赖 Runtime 生命周期）、`PC81`–`PC84`（Chunk 无生成权）、`PC90`（Streaming 不改结果）、`PC98`–`PC99`（解释同源）。
-3. 与既有规范冲突时，先按 D.1 **登记**，再由对应规范的**版本变更**解决；本文档不得直接改写其它规范。
+3. 与既有规范冲突时，先按 D.1 **登记并确认各文件的权威范围**，再通过对应规范的**版本变更**解决；任何修改都应落在真正拥有该规则的权威文件中，并同步更新引用与验证。此条不构成对其他规范的永久修改禁令。
 4. 任何"新增 Phase"提案必须**独立成规范**，并证明：DAG 无环、无反向边、既有 12 项验证保持 PASS、且**可关闭**。
 5. 任何"合并/取消 Phase"提案必须证明：不改变因果方向、不取消定稿点（`PC50`）、不引入 skip-layer 访问（`PC62`）。
