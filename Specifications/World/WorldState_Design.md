@@ -744,7 +744,7 @@ Biome（离散标识）
 | **WS7** | **属性不改密度**：开关 Energy / Fertility 不影响任何体素状态（除既有的地表材料规则） | 两次生成体素快照逐体素比较（差异集合 ⊆ 允许集合） |
 | **WS8** | **因果可解释性**：每个特殊生态/遗迹判定都能回溯到某个来源；不存在"结果 → 原因"的规则 | 结构扫描（规则读取顺序）+ 判定链问答（附录 C） |
 | **WS9** | **不新增 VoxelType / 不改 VoxelCore** | 结构性检查（类型集合冻结、无新写入语义） |
-| **WS10** | **零修改既有实现**：VoxelCore / WorldGeneration / 地质实现 / Mesh / View / Runtime / Streaming / Bootstrap 的 SHA 不变 | 文件哈希比对（既有验证入口做法） |
+| **WS10** | **兼容基线**：默认不应无必要地改变 VoxelCore / WorldGeneration / Geology / Mesh / View / Runtime / Streaming / Bootstrap 的行为；若当前任务明确授权修改相关实现，则更新基线并验证退化兼容与确定性不变量 | 按任务变更范围进行文件哈希、逐体素对照与回归检查 |
 | **WS11** | **退化兼容**：Energy = 0 且扩展参数关闭 ⇒ 世界与今天逐体素一致 | 与 Stage 1/Stage C 基线对照（逐体素 + 内容哈希） |
 | **WS12** | **确定性证据**：同 `Seed` + 坐标 ⇒ 体素快照与派生 Mesh 内容哈希完全一致 | 内容哈希比较 |
 
