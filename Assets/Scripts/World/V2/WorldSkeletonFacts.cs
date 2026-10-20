@@ -5,9 +5,9 @@ namespace World.V2
     /// <summary>
     /// **WorldSkeleton V1 单大陆退化查询结果 + 最小查询入口**（World V2 · Phase 3.2 · 纯数据 + 纯函数）。
     ///
-    /// 职责（唯一）：给定 `(世界坐标, 世界生成配置, 海平面)`，产出该坐标的 3 个 V1 骨架事实：
+    /// 职责（唯一）：给定 `(世界坐标, 世界生成配置)`，产出该坐标的 3 个 V1 骨架事实（海平面由 `settings.SeaLevel` 提供）：
     ///   · <see cref="Elevation"/> —— 该**列**的地表高度（既有高度场只读转发；与 `Y` 无关）；
-    ///   · <see cref="Ocean"/>     —— 是否海洋（`Elevation` 严格小于海平面）；
+    ///   · <see cref="Ocean"/>     —— 是否海洋（`Elevation` 严格小于 `settings.SeaLevel`）；
     ///   · <see cref="Continent"/> —— 大陆编号（海洋 = `0`；单大陆退化模式陆地 = `1`）。
     ///
     /// 契约依据：
@@ -24,8 +24,8 @@ namespace World.V2
     ///       <see cref="TryEvaluate"/> 返回 `false` 且 `facts` 为 `default`（`IsValid == false`）；
     ///       **不钳制**坐标、**不**用合法默认值冒充成功。`Continent = 0`（海洋）是**合法结果**，与失败无关。
     /// 【3】**前置条件由调用方保证**（本类型不校验、不修正、不钳制）：
-    ///       · `settings` 合法（见 `WorldGenerationSettings.IsValid`）；
-    ///       · 海平面落在 `[0, WorldHeight]`（`WorldParameter_Contract.md` §5.2 冻结范围）。
+    ///       · `settings` 合法（见 `WorldGenerationSettings.IsValid`；其范围校验**已包含** `SeaLevel ∈ [0, WorldHeight]`）。
+    /// **海平面不再有独立入参**：`Ocean` 的判定阈值唯一来源是 `settings.SeaLevel`（R40 统一来源）。
     /// 【4】**有效实例的构造权限**：构造函数为 `private`。C# 中 `private` 的可见范围是
     ///       "本类型及其嵌套类型"，因此**只有本类型内部**能构造有效实例；同时本实现把
     ///       `new WorldSkeletonFacts(...)` 的调用点**显式集中**在 <see cref="TryEvaluate"/> 内的
@@ -88,13 +88,12 @@ namespace World.V2
         ///
         /// 成功：`true` + 完整有效结果（`IsValid == true`）。
         /// 失败：`false` + `default`（`IsValid == false`）；唯一的失败条件是垂直坐标越界（`D1`）。
-        /// 本方法**不**校验 `settings` 合法性与海平面范围（属调用方前置条件），
+        /// 本方法**不**校验 `settings` 合法性（属调用方前置条件；`settings.SeaLevel` 范围由 `WorldGenerationSettings.IsValid` 负责），
         /// **不**钳制坐标，**不**引入失败原因通道。
         /// </summary>
         public static bool TryEvaluate(
             WorldCoordinate position,
             WorldGenerationSettings settings,
-            int seaLevel,
             out WorldSkeletonFacts facts)
         {
             // `D1`（垂直范围，已批准）：`0 <= Y < WorldHeight` 之外一律**明确失败**；不钳制、不修正。
@@ -107,8 +106,8 @@ namespace World.V2
             // `F-1`：`Elevation` 直接只读转发既有高度场（列级量，与 `Y` 无关）；不复制其算法。
             int elevation = HeightFunction.GetTerrainHeight(position.X, position.Z, settings);
 
-            // `F-2` / `WC3`：`Ocean` 由 `Elevation` 严格小于海平面派生（不得使用独立噪声）。
-            bool ocean = elevation < seaLevel;
+            // `F-2` / `WC3`：`Ocean` 由 `Elevation` 严格小于 `settings.SeaLevel` 派生（不得使用独立噪声；SeaLevel 唯一来源 = 配置）。
+            bool ocean = elevation < settings.SeaLevel;
 
             // `F-3` / `D3`：海洋 = 0；单大陆退化模式陆地 = 1。
             int continent = ocean ? 0 : 1;

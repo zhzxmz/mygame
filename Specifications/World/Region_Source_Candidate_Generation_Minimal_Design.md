@@ -5,6 +5,8 @@
 > **已批准的边界（G-1/G-2/G-3）**：① Region 层承担候选生成职责，产物为 `RegionSourceCandidate`；② `Kind` 用整数码，映射须登记在 `Region_Design.md` 指定位置；③ 首次实现**只承诺确定性生成**，**不承诺**完整枚举或有界枚举。`G-4`/`G-5`/`G-6` **本阶段不触发**（不引入上限、达限截断、新失败路径）。
 >
 > **原始起草轮次的工作范围（历史记录）**：当时只新增本文档，不修改 C#、场景、Prefab 或既有契约。该范围不是永久禁改规则。本文档列出的 `MS-1`–`MS-4` 仍是候选生成具体实现的真实决策门槛；未批准前，不得自行发明 `Kind` 码值、`Epoch`/`Ordinal` 保留值或参数登记语义。后续实现可按任务授权修改现有代码/契约，但不得创建平行参数系统，也必须遵守本文列出的输入边界与确定性要求。
+>
+> **【历史语境（后续轮次追加，不改本文历史结论）】** §2.2 的「只读代码核查」是 **Phase 3.1.13 时点**的代码状态，其中关于地形派生量的表述现已过时，按**历史记录**保留：`Elevation` 不再是「域标签整数哈希 `Range(seed, 1, ParameterId, position, 128)`」，现为**只读转发** `HeightFunction.GetTerrainHeight(position.X, position.Z, settings)`；`Ocean` 不再是「`Elevation < 64`」，现为 `OceanRule` 严格比较 `elevation < settings.SeaLevel`，其中 `SeaLevel` 是**世界生成配置**（登记默认值 `WorldGenerationSettings.DefaultSeaLevel = 64`）。上文所列 `MS-1`–`MS-4` 决策门槛与 §8 停止声明**仍然有效**，本标注不解除任何约束；§8 停止声明中提及的「`Elevation` 占位哈希」「`SeaLevel` 占位默认值」同样指该时点的占位链，**停止声明继续有效**。
 
 ---
 

@@ -341,7 +341,7 @@ Seed（配置）
 | **PS6** | 整数参数（`Elevation`/`Ocean` 派生/ID 类）不得被当作连续量插值；连续参数不得被四舍五入为离散判定条件 |
 | **PS7** | 归一化必须**与量纲无关的确定性**：不得依赖平台浮点路径差异（继承 `WorldGeneration_Geology.md` §8.2 D5） |
 
-> **`PS5` 的适用范围（澄清，不新增规则、不改数值）**：`PS5` 的"越界一律钳制"适用于**参数值域**（即本契约 §5.2 冻结范围内的参数值）。它**不**延伸为 WorldSkeleton V1 查询入口的输入处理逻辑：`WorldSkeletonFacts.TryEvaluate(...)` 对 `seaLevel` **不校验、不钳制、不修正**，`seaLevel ∈ [0, WorldHeight]` 与 `settings` 合法性均由**调用方**保证（见 `WorldSkeleton_V1_Minimal_Contract.md` `IF-8`/`IF-9`）。本澄清**不**改变 `PS1`–`PS7` 任何条款的效力与数值。
+> **`PS5` 的适用范围（澄清，不新增规则、不改数值）**：`PS5` 的"越界一律钳制"适用于**参数值域**（即本契约 §5.2 冻结范围内的参数值）。它**不**延伸为 WorldSkeleton V1 查询入口的输入处理逻辑：`WorldSkeletonFacts.TryEvaluate(position, settings, out facts)` **不接收**独立 `seaLevel`（R40 统一来源，`Ocean` 判定使用 `settings.SeaLevel`），对 `settings` 合法性**不校验、不钳制、不修正**，该合法性由**调用方**保证（见 `WorldSkeleton_V1_Minimal_Contract.md` `IF-8`/`IF-9`）。本澄清**不**改变 `PS1`–`PS7` 任何条款的效力与数值。
 
 ### 5.2 范围冻结表
 
@@ -366,10 +366,12 @@ Seed（配置）
 | `BiomeSample.Moisture`（`IBiomeProvider.cs:28-31`） | 整数 `[0, 1000]` | `Moisture` | `m = M / 1000` |
 | `HeightFunction.GetTerrainHeight(...)`（`HeightFunction.cs:27`） | 整数世界坐标 | `Elevation` | 直接对应（同一量纲） |
 | `GeologySampler.SurfaceHeightAt(...)`（`GeologySampler.cs:129/134`） | 整数世界坐标 | `Elevation` | 直接对应（规范名 `SurfaceHeight` → 实现名映射） |
+
+> **Elevation 接线状态与两段式职责边界（本轮同步）**：① **Elevation 的 Base 段已接线** —— WorldParameterRules.ElevationRule 直接调用 HeightFunction.GetTerrainHeight(position.X, position.Z, settings)（整数体素、不归一化，符合 PS6/WSC13），**不再使用任何参数域**（WPS57 终态达成）。② **职责边界**：Base 由参数求值方产出（WorldParameterEvaluator.Evaluate，IsFinalized == false）；Modifier 唯一写入者是 Region 层（PC20）；Final 由 Finalize(baseState, regionModifier) 合成 clamp01(Base + Modifier)，Elevation/Ocean 不进入任何修正求和式（WSC10）。③ **当前 Region 修正数据仍是占位实现**（RegionModifierDetermination 返回占位区间）⇒ Final **结构上已定稿、数据上仍是占位**，不得视为真实世界影响。④ **World V2 尚未接入生成运行时**：WorldStatePipeline 无生产调用者，世界参数未注入 VoxelWorld / Geology 生成链。
 | `GeologySample.CaveDensity`（`GeologySample.cs:51`） | 浮点（噪声标量） | `CaveDensity`（表 D） | 同一量纲；范围由 Geology 规范声明 |
 | `DepositSample.Richness`（`IDepositProvider.cs:39`） | 整数 `[0,100]` | （属 `DepositZone` 层） | 与 `ResourcePresence` **不同层**，禁止混用（§3.5） |
 
-> **WorldSkeleton V1 查询接口的消费方式（登记，不新增参数、不新增规则）**：`WorldSkeletonFacts.TryEvaluate(...)` 对 `Elevation` **直接调用**上表登记的 `HeightFunction.GetTerrainHeight(position.X, position.Z, settings)`（同一量纲、无映射、无域哈希）；`Ocean` 与 `Continent` 由该 `Elevation` 按 `WorldState_Design.md` `WC3` 与 `WorldSkeleton_V1_Minimal_Contract.md` `IF-6`/`IF-7` 派生，**不引入**新参数。该查询接口**不读取**本契约的占位实现（域 1 哈希占位），也**不改变**参数系统侧的占位状态（`WPS54a` 仍有效）。
+> **WorldSkeleton V1 查询接口的消费方式（登记，不新增参数、不新增规则）**：`WorldSkeletonFacts.TryEvaluate(...)` 对 `Elevation` **直接调用**上表登记的 `HeightFunction.GetTerrainHeight(position.X, position.Z, settings)`（同一量纲、无映射、无域哈希）；`Ocean` 与 `Continent` 由该 `Elevation` 与 `settings.SeaLevel` 按 `WorldState_Design.md` `WC3` 与 `WorldSkeleton_V1_Minimal_Contract.md` `IF-6`/`IF-7` 派生，**不引入**新参数（R40：`SeaLevel` 唯一来源 = `settings.SeaLevel`）。该查询接口**不读取**本契约的占位实现（域 1 哈希占位），也**不改变**参数系统侧的占位状态（`WPS54a` 仍有效）。
 
 **硬性**
 

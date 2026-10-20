@@ -920,9 +920,9 @@ public static class GeologyStageCValidation
         new Dictionary<string, string>
         {
             // 规范（12 份）+ ADR
-            { "../Specifications/World/VoxelWorld_Architecture.md", "779DF1EFC4082579" },
-            { "../Specifications/World/VoxelWorld_Core.md", "F718B68E95100C57" },
-            { "../Specifications/World/WorldGeneration_Core.md", "684753D5E6B31565" },
+            { "../Specifications/World/VoxelWorld_Architecture.md", "F09B17A1002D7CD2" },
+            { "../Specifications/World/VoxelWorld_Core.md", "6D471FFA184B13EC" },
+            { "../Specifications/World/WorldGeneration_Core.md", "91F0FCDA380C91F7" },
             { "../Specifications/World/VoxelWorld_Mesh.md", "81CEDBFA6E9756CE" },
             { "../Specifications/World/VoxelWorld_Mining.md", "8A2B020DDB97422B" },
             { "../Specifications/World/VoxelWorld_View.md", "D9BD5422026E21B6" },
@@ -930,8 +930,8 @@ public static class GeologyStageCValidation
             { "../Specifications/World/VoxelWorld_Runtime_Core.md", "10F1EC7F10DAD8F3" },
             { "../Specifications/World/VoxelWorld_Runtime_Interface.md", "0AE21EB684412685" },
             { "../Specifications/World/VoxelWorld_Runtime_Core_Implementation.md", "D816F09C60A810C4" },
-            { "../Specifications/World/WorldGeneration_Geology.md", "1A7DD7E7AE1EBAC9" },
-            { "../Specifications/World/WorldGeneration_Geology_Implementation.md", "9BF0E11A4E5CA87D" },
+            { "../Specifications/World/WorldGeneration_Geology.md", "D1E70FE71BC400E1" },
+            { "../Specifications/World/WorldGeneration_Geology_Implementation.md", "2700AE40B0CB09A0" },
             { "../Specifications/ArchitectureDecisionWorldSpaceEntity.txt", "218D1CAAA738C59D" },
             // VoxelCore / Generation / Mesh / View
             { "Scripts/VoxelWorld/VoxelType.cs", "02C1F54580AEE541" },
@@ -940,7 +940,7 @@ public static class GeologyStageCValidation
             { "Scripts/VoxelWorld/VoxelChunk.cs", "4DBDFBAC5BCE500C" },
             { "Scripts/VoxelWorld/VoxelWorld.cs", "D9E749A466635918" },
             { "Scripts/VoxelWorld/VoxelWorldDebug.cs", "6AE0C41274AF9154" },
-            { "Scripts/VoxelWorld/Generation/WorldGenerationSettings.cs", "140B7E289F05C6FA" },
+            { "Scripts/VoxelWorld/Generation/WorldGenerationSettings.cs", "7F11DEE8061E4FA1" },
             { "Scripts/VoxelWorld/Generation/IWorldGenerator.cs", "B39614CA9BF37921" },
             { "Scripts/VoxelWorld/Generation/HeightFunction.cs", "715341D5FC652408" },
             { "Scripts/VoxelWorld/Generation/BasicTerrainGenerator.cs", "7FFD8F4B1226EA4E" },
@@ -966,14 +966,14 @@ public static class GeologyStageCValidation
             { "Scripts/VoxelWorld/Runtime/Streaming/ChunkStreamingReport.cs", "B57EA40C7FA6ECC9" },
             { "Scripts/VoxelWorld/Runtime/Streaming/ChunkStreamingDriver.cs", "26DF1B6B22E2DFF3" },
             { "Scripts/VoxelWorld/Runtime/Streaming/RuntimeCoreRequestSink.cs", "FD0E5CD9D1C9D77B" },
-            { "Scripts/Game/VoxelWorldStreamingBootstrap.cs", "4738634952568520" },
+            { "Scripts/Game/VoxelWorldStreamingBootstrap.cs", "8A59289F0194D20F" },
             // 既有 Editor 验证入口（除下列两处已授权修改）
             { "Editor/VoxelWorldCoreValidation.cs", "6DE813AABCE95394" },
             { "Editor/WorldGenerationCoreValidation.cs", "4A517A0F902A1066" },
             { "Editor/VoxelMeshCoreValidation.cs", "5FFD8451D2CE05EB" },
             { "Editor/VoxelWorldViewValidation.cs", "BEFBAAF6B111A241" },
-            { "Editor/VoxelWorldRuntimeCoreValidation.cs", "0E0B5C160FEAB236" },
-            { "Editor/ChunkStreamingValidation.cs", "13E244B6EE978FC8" },
+            { "Editor/VoxelWorldRuntimeCoreValidation.cs", "C5ABCECD2C338BED" },
+            { "Editor/ChunkStreamingValidation.cs", "BEB05E3DD16D48F3" },
             // Stage A/B 的地质文件（除 StageAValidation 已授权修改）
             { "Scripts/VoxelWorld/Generation/Geology/GeologySettings.cs", "BEA8EB4F4967721C" },
             { "Scripts/VoxelWorld/Generation/Geology/GeologyNoise.cs", "2266E7A880E43315" },
@@ -990,8 +990,8 @@ public static class GeologyStageCValidation
     private static readonly Dictionary<string, string> AuthorizedChangedFiles =
         new Dictionary<string, string>
         {
-            { "Editor/GeologyStageAValidation.cs", "DF42F8605BA60CAF" },
-            { "Editor/GeologyStageBValidation.cs", "CFA08E4EE8D49C99" }
+            { "Editor/GeologyStageAValidation.cs", "67DB0CD6161EE4F4" },
+            { "Editor/GeologyStageBValidation.cs", "58DA2160E30ABA72" }
         };
 
     private static void ValidateExistingFilesUnchanged()

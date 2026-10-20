@@ -1165,7 +1165,7 @@ public static class VoxelWorldRuntimeCoreValidation
             { "Scripts/VoxelWorld/VoxelChunk.cs", "4DBDFBAC5BCE500C" },
             { "Scripts/VoxelWorld/VoxelWorld.cs", "D9E749A466635918" },
             { "Scripts/VoxelWorld/VoxelWorldDebug.cs", "6AE0C41274AF9154" },
-            { "Scripts/VoxelWorld/Generation/WorldGenerationSettings.cs", "140B7E289F05C6FA" },
+            { "Scripts/VoxelWorld/Generation/WorldGenerationSettings.cs", "7F11DEE8061E4FA1" },
             { "Scripts/VoxelWorld/Generation/IWorldGenerator.cs", "B39614CA9BF37921" },
             { "Scripts/VoxelWorld/Generation/HeightFunction.cs", "715341D5FC652408" },
             { "Scripts/VoxelWorld/Generation/BasicTerrainGenerator.cs", "7FFD8F4B1226EA4E" },

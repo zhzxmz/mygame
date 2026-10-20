@@ -1,3 +1,5 @@
+using VoxelWorld.Generation;
+
 namespace World.V2
 {
     /// <summary>
@@ -72,16 +74,12 @@ namespace World.V2
         ///   量纲 = 整数体素（y 轴），范围 `[0, WorldHeight-1]`（契约 §5.2；`WorldHeight` 来自 `WorldGenerationSettings`）。
         ///   按契约 `WSC13` / `PS6`：整数参数**不得**被当作连续量插值。
         ///
-        /// 【本回合】占位：域标签整数哈希 → `[0, ProvisionalWorldHeight-1]`（**整数取值**，保持整数语义）。
-        /// 【替换点】接线只读高度场；`ProvisionalWorldHeight` 与域标签一并移除。
-        /// 【登记缺口】契约 §6.4 的域 1（`Skeleton`）未把 `Elevation` 列入覆盖清单（真实 `Elevation` 是转发量、不需要域）；
-        ///   本占位使用域 1 仅作为临时标签（`[待确认]`，属占位期用法，不改变 §6.4 登记）。
+        /// 【已接线】直接只读转发既有高度场 `HeightFunction.GetTerrainHeight(x, z, settings)`（不再是域哈希占位）。
+        /// 【登记】真实 `Elevation` 是转发量，**不使用任何参数域**；契约 §6.4 登记保持不变（`WPS57`）。
+        /// 【前置】`settings` 由调用方（世界创建 owner）显式提供，本层不自行创建默认配置。
         /// </summary>
         private sealed class ElevationRule : IWorldParameterRule
         {
-            /// <summary>临时占位高度跨度（真实值 = `WorldGenerationSettings.WorldHeight`，本回合未接入）。</summary>
-            private const int ProvisionalWorldHeight = 128;
-
             public int ParameterId
             {
                 get { return WorldParameterIds.Elevation; }
@@ -97,14 +95,11 @@ namespace World.V2
                 get { return WorldParameterCompositionKind.Forwarded; }
             }
 
-            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position)
+            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position, WorldGenerationSettings settings)
             {
-                return WorldParameterHash.Range(
-                    seed,
-                    WorldParameterHash.SkeletonDomainId,
-                    ParameterId,
-                    position,
-                    ProvisionalWorldHeight);
+                // Elevation 终态（WPS55–WPS57 / A-11）：**只读转发**既有高度场，**不使用任何参数域**。
+                // 单位沿用既有高度场（整数体素 y），不归一化（PS6 / WSC13）。
+                return HeightFunction.GetTerrainHeight(position.X, position.Z, settings);
             }
         }
 
@@ -114,17 +109,13 @@ namespace World.V2
         /// 【真实来源】派生规则 `Elevation &lt; SeaLevel`（契约 §3.2 表 A 来源列）；量纲 = 布尔 `{false, true}`。
         ///   依赖**步骤 0** 的 `Elevation`（严格更早的步骤，无环，`WSC16`）；按 `WSC10` **不得**进入任何修正求和式。
         ///
-        /// 【本回合】派生形式**已按契约实现**（不是占位公式）；唯一占位量是 `SeaLevel`：
-        ///   `ProvisionalSeaLevel = 64` 取自契约表 C `SeaLevel` 的**登记默认值 64**（真实值来自显式配置）。
-        /// 【替换点】把 `ProvisionalSeaLevel` 换成配置读取（`WorldGenerationSettings` / 显式参数）。
+        /// 【已接线】派生形式按契约实现；`SeaLevel` 取自 `WorldGenerationSettings.SeaLevel`（配置，世界创建期）。
         /// 【登记缺口】布尔量在 `float` 容器中的**表示法**属登记缺口（`PM32` 要求"显式 None/布尔语义"，本回合不裁决）：
         ///   本规则只保证**不插值**（`WSC13`，返回 0 或 1），不定义最终表示形态。
         /// </summary>
         private sealed class OceanRule : IWorldParameterRule
         {
             /// <summary>契约表 C 登记的 `SeaLevel` 默认值（占位；真实值来自显式配置）。</summary>
-            private const float ProvisionalSeaLevel = 64f;
-
             public int ParameterId
             {
                 get { return WorldParameterIds.Ocean; }
@@ -140,7 +131,7 @@ namespace World.V2
                 get { return WorldParameterCompositionKind.Derived; }
             }
 
-            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position)
+            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position, WorldGenerationSettings settings)
             {
                 float elevation;
                 if (!evaluated.TryGetBaseValue(WorldParameterIds.Elevation, out elevation))
@@ -149,7 +140,7 @@ namespace World.V2
                         "Ocean 规则只能在步骤 0（Elevation）之后求值（WSC §2.3）。");
                 }
 
-                return elevation < ProvisionalSeaLevel ? 1f : 0f;
+                return elevation < settings.SeaLevel ? 1f : 0f;
             }
         }
 
@@ -177,7 +168,7 @@ namespace World.V2
                 get { return WorldParameterCompositionKind.AdditiveClamped; }
             }
 
-            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position)
+            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position, WorldGenerationSettings settings)
             {
                 return WorldParameterHash.Unit(
                     seed,
@@ -211,7 +202,7 @@ namespace World.V2
                 get { return WorldParameterCompositionKind.AdditiveClamped; }
             }
 
-            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position)
+            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position, WorldGenerationSettings settings)
             {
                 return WorldParameterHash.Unit(
                     seed,
@@ -249,7 +240,7 @@ namespace World.V2
                 get { return WorldParameterCompositionKind.AdditiveClamped; }
             }
 
-            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position)
+            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position, WorldGenerationSettings settings)
             {
                 float temperature;
                 float moisture;
@@ -291,7 +282,7 @@ namespace World.V2
                 get { return WorldParameterCompositionKind.AdditiveClamped; }
             }
 
-            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position)
+            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position, WorldGenerationSettings settings)
             {
                 return BaseConstant;
             }
@@ -323,7 +314,7 @@ namespace World.V2
                 get { return WorldParameterCompositionKind.AdditiveClamped; }
             }
 
-            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position)
+            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position, WorldGenerationSettings settings)
             {
                 return BaseConstant;
             }
@@ -355,7 +346,7 @@ namespace World.V2
                 get { return WorldParameterCompositionKind.AdditiveClamped; }
             }
 
-            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position)
+            public float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position, WorldGenerationSettings settings)
             {
                 return BaseConstant;
             }

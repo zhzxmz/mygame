@@ -55,7 +55,7 @@
 | V2 参数层（Phase 2 等价实现） | `Assets/Scripts/World/V2/`：8 参数规则表 + `WorldParameterEvaluator`（唯一 `Compose`，**L115–L124**）+ `WorldParameterState` |
 | V2 Region 层（**占位链**） | `RegionDetermination`（哈希直接构造身份，**L84**）、`RegionPipeline.ResolveContext`（**L60**）、`RegionModifierDetermination.Determine`（**L69**）、`RegionSourceCandidate`（9 成员，纯数据载体） |
 | 参数域登记 | `WorldParameterHash.SkeletonDomainId = 1`（**L32**）；`WorldParameter_Contract.md` §6.4 域表：`1` = `Skeleton`（覆盖 `Continent` / `Slope` / 基础气候带） |
-| **WorldSkeleton V1 查询接口（已实现 · 阶段 A/B）** | `Assets/Scripts/World/V2/WorldSkeletonFacts.cs`（**121 行**；SHA-256 `EE8627035B72FD16074662BB2B13F963130D45B28F0A05945C3678FE0E3B0AC0`）+ 配套 `WorldSkeletonFacts.cs.meta`（GUID `0e1392c2839f0b94395dfd95eddb681a`）；**Unity 2022.3.62f1c1 项目编译通过**（`Assembly-CSharp.dll` 含 `WorldSkeletonFacts`/`TryEvaluate` 符号） |
+| **WorldSkeleton V1 查询接口（已实现 · 阶段 A/B）** | `Assets/Scripts/World/V2/WorldSkeletonFacts.cs`（**120 行**；SHA-256 `98B59916CA9CDBCC0FD8CE814DDE699EE96BBD21E07886DEFFD6A31B2E0DDA1C`）+ 配套 `WorldSkeletonFacts.cs.meta`（GUID `0e1392c2839f0b94395dfd95eddb681a`）；**Unity 2022.3.62f1c1 项目编译通过**（`Assembly-CSharp.dll` 含 `WorldSkeletonFacts`/`TryEvaluate` 符号） |
 
 ### 1.4 当前尚未实现的内容（**缺口**）
 
@@ -137,7 +137,7 @@
 
 | # | 参数 | 含义 | 依据等级（概念） | 登记状态 | Owner / 取值来源 | 未批准项（不得自行取值） | 是否阻塞最小里程碑 |
 |---|---|---|---|---|---|---|---|
-| **C-1** | **`SeaLevel`** | 海洋判定阈值 | ① | **已登记**：`WorldParameter_Contract.md` 表 C，默认 **`64`**（显式配置），范围 `[0, WorldHeight]`、单位体素 | 配置（世界创建期） | 无（沿用既有登记值，**不另设默认值**） | 否 |
+| **C-1** | **`SeaLevel`** | 海洋判定阈值 | ① | **已登记**：`WorldParameter_Contract.md` 表 C，默认 **`64`**（显式配置），范围 `[0, WorldHeight]`、单位体素 | 配置（世界创建期）：**承载 = `WorldGenerationSettings.SeaLevel`（R40 起唯一来源，接口无独立入参）** | 无（沿用既有登记值，**不另设默认值**） | 否 |
 | **C-2** | **`ContinentCount`** | 大陆数量 | ① | **已登记**：表 C，默认 **`1`**（可退化为全部陆地），范围 `[1, 上限显式]` | 配置 | 无（沿用既有登记值，**不另设默认值**） | 否（退化模式即用 `1`） |
 | **C-3** | **`ContinentCenters`** | 各大陆中心 | ①（**仅"确定性"要求**：`WC1` **L638**）；命名见 `WorldState_Design.md` §7.3 **L622**（该节自注"参数设计（显式，不实现）"，**不构成来源裁定**） | **待确认（未批准）**：**取值来源选择**（`Seed` 派生 / 世界创建期显式提供 / 其它）、**坐标类型与单位**均**未获批准**；数值范围/编码/算法亦未批准 | **待确认** | 来源选择、坐标类型、单位、范围、编码、算法 | 否（退化模式不依赖中心取值；多大陆形态待 `OD-4′`） |
 | **C-4** | **`ContinentRadius`** | 大陆规模 | ①（`WC1`；§7.3 **L623**） | 同上：**语义与取值来源已登记**（配置，世界创建期）；**默认值/范围/编码未批准** | 配置（世界创建期） | 默认值、范围、编码 | 否（退化模式可退化为"无掩码"） |
@@ -157,15 +157,15 @@
 
 | # | 已冻结条款 | 内容 |
 |---|---|---|
-| **IF-1** | **查询入口** | `public static bool WorldSkeletonFacts.TryEvaluate(WorldCoordinate position, WorldGenerationSettings settings, int seaLevel, out WorldSkeletonFacts facts)`（命名空间 `World.V2`） |
+| **IF-1** | **查询入口** | `public static bool WorldSkeletonFacts.TryEvaluate(WorldCoordinate position, WorldGenerationSettings settings, out WorldSkeletonFacts facts)`（命名空间 `World.V2`；R40 起**去除独立 `seaLevel` 入参**，`Ocean` 判定统一取自 `settings.SeaLevel`） |
 | **IF-2** | **Seed 的承载** | Seed **只**由 `settings.Seed` 承载；查询入口**不接收**独立 `WorldSeed` 参数（`Q-1` ① 的 Seed 输入即由 `settings.Seed` 提供） |
 | **IF-3** | **`Elevation` 的来源（约束对象 = `WorldSkeletonFacts`）** | **本类型**只读调用既有 `HeightFunction.GetTerrainHeight(position.X, position.Z, settings)` 取得 `Elevation`；**不复制、不重写**高度计算逻辑，**不改变其调用语义**，**不**经参数域哈希。**本条不冻结 `HeightFunction` 的内部实现**：允许其在保持**既有签名与行为契约**的前提下演进内部实现（见 `HeightFunction.cs` L14–L16 自注与 `A-10`） |
 | **IF-4** | **垂直范围** | `0 <= position.Y < settings.WorldHeight`；越界 ⇒ **明确失败**，**不钳制**、不修正（`Q-4`/`D1`/`A-15`） |
 | **IF-5** | **成功 / 失败 + 调用约定** | 成功 ⇒ `true` + **完整有效**结果（`IsValid == true`）；失败 ⇒ `false` + `default`（`IsValid == false`，三字段为默认值）；**不存在部分结果**（`Q-8`/`D2`/`A-16`）。**调用约定（强制）**：调用方**必须先**确认 `TryEvaluate` 返回 `true` **或** `facts.IsValid == true`，**之后**才能把 `Elevation` / `Ocean` / `Continent` 当作有效结果使用；**失败返回的 `default` 不代表合法海洋，也不代表任何其它世界事实**（不得据此推导"该处为海洋/低地"等结论） |
-| **IF-6** | **`Ocean`** | `Ocean = Elevation < seaLevel`（**严格小于**；`WC3`） |
+| **IF-6** | **`Ocean`** | `Ocean = Elevation < settings.SeaLevel`（**严格小于**；`WC3`；R40 起阈值唯一来源 = `settings.SeaLevel`） |
 | **IF-7** | **`Continent`** | `Continent = Ocean ? 0 : 1`（**当前仅单大陆退化模式**；`Q-10`/`D3`/`A-17`） |
-| **IF-8** | **调用方前置条件（含违反后果）** | **前置条件（由调用方保证）**：① `settings` 合法（`WorldGenerationSettings.IsValid`）；② `seaLevel ∈ [0, WorldHeight]`（`WorldParameter_Contract.md` §5.2 冻结范围）。查询入口**不校验、不钳制、不修正**，也**不**新增失败原因通道。**违反前置条件时**：调用方**不能依赖**本契约保证的任何结果（本契约对该情形**不作保证**）；**不因此要求**查询入口增加校验、钳制、修正或新的失败分支 |
-| **IF-9** | **`PS5` 的边界** | `WorldParameter_Contract.md` `PS5`（参数越界钳制）**仅**适用于**参数值域**；**不**延伸为本查询入口的钳制逻辑。本入口对 `seaLevel` **无任何**范围处理（见 `IF-8`） |
+| **IF-8** | **调用方前置条件（含违反后果）** | **前置条件（由调用方保证）**：① `settings` 合法（`WorldGenerationSettings.IsValid`）——**该检查已涵盖** `SeaLevel ∈ [0, WorldHeight]`（`WorldParameter_Contract.md` §5.2 冻结范围）；R40 起接口**不再有独立 `seaLevel` 入参**。查询入口**不校验、不钳制、不修正**，也**不**新增失败原因通道。**违反前置条件时**：调用方**不能依赖**本契约保证的任何结果（本契约对该情形**不作保证**）；**不因此要求**查询入口增加校验、钳制、修正或新的失败分支 |
+| **IF-9** | **`PS5` 的边界** | `WorldParameter_Contract.md` `PS5`（参数越界钳制）**仅**适用于**参数值域**；**不**延伸为本查询入口的钳制逻辑。R40 起本入口**不接收** `seaLevel` 入参，其范围由 `WorldGenerationSettings.IsValid` 负责；本入口**无任何**范围处理或钳制（见 `IF-8`） |
 | **IF-10** | **未冻结项（明确排除）** | 多大陆编号分配/稳定化/持久化算法、`ContinentCenters` 的来源与坐标类型、`Slope`、基础气候带、山脉/河流/河谷/土壤母质、Region 归属与接线 —— **均未冻结、未实现**（见 §3A `F-4`/`F-5`、§7） |
 
 > **条款分层与效力（`R-1`）**：`IF-*` 是 `A-15`–`A-17`（已批准决定）与 `Q-*`（行为条款）相关规则的**接口级重述**；**不得**用接口级重述改变上位已批准语义。若发现条款之间出现**实质不一致**，应**报告并停止**，**不得**自行选择一条覆盖另一条。
@@ -174,7 +174,7 @@
 
 | # | 条款 | 内容 | 依据 |
 |---|---|---|---|
-| **Q-1** | **查询输入（概念）** | ① **Seed**（**由 `settings.Seed` 承载**，见 `IF-2`）；② **世界坐标**（唯一空间输入）；③ 世界创建期配置：`settings`（世界生成配置）+ `seaLevel`（`C-1` 登记配置量）。**`ContinentCount`（`C-2`）不是本查询的输入**——V1 只实现单大陆退化模式（`IF-7`）。**不**接受 Chunk 标识、邻域状态或"部分世界" | `PC18`；`WC6`（**L643**）；`PZ11`；`IF-2`/`IF-8` |
+| **Q-1** | **查询输入（概念）** | ① **Seed**（**由 `settings.Seed` 承载**，见 `IF-2`）；② **世界坐标**（唯一空间输入）；③ 世界创建期配置：`settings`（世界生成配置，**含 `settings.SeaLevel`**——`C-1` 登记配置量；R40 起为唯一来源）。**`ContinentCount`（`C-2`）不是本查询的输入**——V1 只实现单大陆退化模式（`IF-7`）。**不**接受 Chunk 标识、邻域状态或"部分世界" | `PC18`；`WC6`（**L643**）；`PZ11`；`IF-2`/`IF-8` |
 | **Q-2** | **返回值** | **V1 已冻结（与实现对齐）**：`IsValid` + `Elevation`（整数体素）+ `Ocean`（布尔判定）+ `Continent`（整数 ID）（`IF-5`–`IF-7`）。**未冻结 / 未实现**：`Slope`（`F-4`）、基础气候带基值（`F-5`）、"该值是否已含大陆掩码叠加"（掩码未实现，`F-6`）——因此**不得**声称 V1 返回值已含大陆掩码叠加，也不得声称返回 `Slope`/气候带 | `IF-5`–`IF-7`；§3A `F-1`–`F-6`；`GC13`（**L90**） |
 | **Q-3** | **无数据** | 在 V1 纯函数模型下**不应存在**（每个世界坐标都有骨架事实）。若未来引入"事实不覆盖区"，必须**显式表达**，且**不得**与"海洋/无大陆"混同 | `PC18`；`WC1`（**L638**） |
 | **Q-4** | **无效位置（`D1`/`A-15`，已批准）** | **有效垂直范围 = `0 ≤ y < WorldHeight`**；`y < 0` 或 `y >= WorldHeight` ⇒ 查询**必须明确失败**（**不得**夹取、钳制或静默修正，也**不得**返回合法默认值）；水平方向无限 ⇒ **无**无效水平位置，**不新增**水平越界限制（`RW2` **L579**） | `A-15`；`WorldParameter_Contract.md` `Elevation` 行（`[0, WorldHeight-1]`）；`RW2`（**L579**） |
@@ -303,7 +303,7 @@ WorldSeed
 | **OD-3** | 查询的越界与失败表示 | **已关闭**（`D1`/`D2` → `A-15`/`A-16`）：有效垂直范围 `0 ≤ y < WorldHeight`，越界**必须明确失败**、**不得**夹取/钳制；成功/失败**必须可区分**、**不得**用 `Continent = 0`/`Ocean = false` 等合法默认值冒充、**不得**交付部分结果。**具体机制（异常类型/包装/签名）留给实现轮** |
 | **OD-4′ 之编号部分** | 单大陆退化模式下的陆地 `Continent` 取值 | **已关闭**（`D3` → `A-17`）：`Continent = 0` = 海洋/无大陆（合法结果）；**单大陆退化模式：所有陆地 = `1`**；多大陆编号规则仍待 `OD-4′` |
 | **实现裁决：`settings` 合法性归属** | 查询入口是否自检 `settings.IsValid` | **已关闭**：**由调用方保证**，入口不校验（`IF-8`）。依据：`IsValid` 的既有语境是"生成器构造时强制校验"（`WorldGenerationSettings.cs` **L72**）；`WorldHeight ≤ 0` 时 `D1` 空范围已使一切查询失败，无需额外校验即可保证安全 |
-| **实现裁决：`seaLevel` 范围归属** | 查询入口是否钳制/拒绝越界 `seaLevel` | **已关闭**：**均不**（`IF-8`/`IF-9`）。`PS5` 的钳制仅适用参数值域，**不**延伸至本入口 |
+| **实现裁决：`seaLevel` 来源与范围归属**（R40 更新） | 查询入口是否接收独立 `seaLevel`、是否钳制/拒绝越界值 | **已关闭**：接口**不再接收**独立 `seaLevel`，统一取自 `settings.SeaLevel`（其范围由 `WorldGenerationSettings.IsValid` 保证）；本入口**不钳制、不拒绝**（`IF-8`/`IF-9`）。`PS5` 的钳制仅适用参数值域，**不**延伸至本入口 |
 | **实现裁决：Seed 承载方式** | 是否接收独立 `WorldSeed` 参数 | **已关闭**：**不接收**；Seed 只由 `settings.Seed` 承载（`IF-2`）。依据：`HeightFunction` 只使用 `settings.Seed`；两载体当前 0 处互通、亦无契约要求二者相等 |
 | **实现裁决：结果构造权限** | 如何限制有效实例的构造 | **已关闭**：`private` 构造函数 + 查询入口内置于 `WorldSkeletonFacts`；**代码内构造调用点显式集中在 1 处**（`TryEvaluate` 内，文件内已注释标记）。`private` 仅提供语言层可见性（本类型及其嵌套类型），"唯一调用点"是**实现书面约定**，非编译器保证 |
 
@@ -331,7 +331,7 @@ WorldSeed
 | **AC-12** | 阻塞项只列 `OD-4′`/`OD-5`，并含四要素；`OD-3` 与"单大陆陆地编号"已关闭 | §7.1 + §7.2 |
 | **AC-13** | 未超出白名单修改任何文件 | 交付报告（白名单核验） |
 | **AC-14** | `ContinentCenters` 的来源选择/坐标类型/单位保持**待确认**，且**未**把"确定性"扩大解释为"只能由 `Seed` 派生" | §3B `C-3` + 登记说明 |
-| **AC-15** | **文档与实现一致**：`IF-1`–`IF-10` 可逐条对照 `WorldSkeletonFacts.cs` 实现（入口签名、`Elevation` 来源、垂直范围、成功/失败、`Ocean`、`Continent`、前置条件、`PS5` 边界、未冻结项） | §4.1；`Assets/Scripts/World/V2/WorldSkeletonFacts.cs` |
+| **AC-15** | **文档与实现一致**：`IF-1`–`IF-10` 可逐条对照 `WorldSkeletonFacts.cs` 实现（R40 起按"SeaLevel 唯一来源 = `settings.SeaLevel`"复核；逐条对照项：入口签名、`Elevation` 来源、垂直范围、成功/失败、`Ocean`、`Continent`、前置条件、`PS5` 边界、未冻结项） | §4.1；`Assets/Scripts/World/V2/WorldSkeletonFacts.cs` |
 | **AC-16** | **未冻结项未被写成已批准**：多大陆编号算法、`ContinentCenters` 来源、`Slope`、气候带、山脉/河流/河谷/土壤母质、Region 归属 —— 全部保持"未冻结/未实现"表述 | §4.1 `IF-10`；§7.1；§3A `F-4`/`F-5` |
 
 ---
@@ -343,5 +343,5 @@ WorldSeed
 > **事实与参数**：事实 `F-1`–`F-6` 与配置参数 `C-1`–`C-6` 分节；`C-1`/`C-2` 引用既有登记值；`C-3`–`C-6` 语义与来源已登记、默认值/范围/编码未批准。
 > **查询语义（已冻结，`D1`/`D2`/`D3`）**：有效垂直范围 `0 ≤ y < WorldHeight`、越界**明确失败**（不得钳制）；成功/失败必须分离（不得用 `Continent = 0`/`Ocean = false` 冒充成功）；`Continent = 0` = 海洋/无大陆（**合法结果**）；单大陆退化模式陆地 = `Continent = 1`。
 > **待裁决**：山脉/河流/河谷/土壤母质（`A-12`）；`OD-4′`（含 `C-3` 来源/坐标类型/单位待确认）；`OD-5`。
-> **已冻结的接口形状**（`IF-1`–`IF-10`，已实现）：`WorldSkeletonFacts.TryEvaluate(position, settings, seaLevel, out facts)`；`Elevation` 直接复用 `HeightFunction.GetTerrainHeight(X, Z, settings)`；垂直范围越界明确失败；成功=完整有效、失败=`default`；`Ocean = Elevation < seaLevel`；`Continent = Ocean ? 0 : 1`；Seed 由 `settings.Seed` 承载；`settings` 与 `seaLevel` 由调用方保证；`PS5` 不延伸至本入口。
+> **已冻结的接口形状**（`IF-1`–`IF-10`，已实现）：`WorldSkeletonFacts.TryEvaluate(position, settings, out facts)`（R40：SeaLevel 统一取自 `settings.SeaLevel`）；`Elevation` 直接复用 `HeightFunction.GetTerrainHeight(X, Z, settings)`；垂直范围越界明确失败；成功=完整有效、失败=`default`；`Ocean = Elevation < settings.SeaLevel`；`Continent = Ocean ? 0 : 1`；Seed 由 `settings.Seed` 承载；`settings` 合法性由调用方保证；`PS5` 不延伸至本入口。
 > **实现现状**：V1 **查询接口**已实现并通过 Unity 2022.3.62f1c1 项目编译（阶段 A/B）；**骨架生成层**（大陆/掩码/气候带/`Slope`）、Region 接线、多大陆仍**未实现**。

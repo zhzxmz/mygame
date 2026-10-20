@@ -8,6 +8,13 @@
 >
 > **审查基准（工作区快照，本轮未变）**：
 > `WorldParameterEvaluator.cs` `7B35DBB38A02E719` · `WorldParameterQuery.cs` `4935EE144B3EF932` · `WorldParameterRules.cs` `EB345A4E03674FF7` · `WorldParameterRule.cs` `73F45DE2178C58BF` · `WorldParameterState.cs` `6E65E7C8F5DC2CA1` · `WorldParameterHash.cs` `E9BF9D755F6A1813` · `RegionIdentity.cs` `398E66FFB4D809DC` · `RegionDetermination.cs` `081DCE7C2D6F1B87` · `RegionContext.cs` `67185B6213178DA1` · `RegionPipeline.cs` `BC68677D0443AE53` · `RegionModifier.cs` `14445D42F69F051A` · `RegionModifierDetermination.cs` `A0BA308631929D80` · `WorldSeed.cs` `954DD11740A86885` · `WorldCoordinate.cs` `CD9ECDCB6722823B`
+>
+> **【历史语境（后续轮次追加，不改本文历史结论）】** 本报告是 **Phase 3.1.0 时点快照**，§1.1 / §2.1 / §2.3 描述的是**当时**的代码状态，**不是当前规则**。经复核，上列 14 个 SHA16 基线中 **5 个已漂移**（`WorldParameterEvaluator.cs`、`WorldParameterQuery.cs`、`WorldParameterRules.cs`、`WorldParameterRule.cs`、`WorldParameterState.cs`），另 9 个未变。因此文中下列表述仅作**历史记录**保留：
+> - `Elevation` 为「域哈希占位 `Hash.Range → [0,128)`」⇒ 现为**只读转发** `HeightFunction.GetTerrainHeight(position.X, position.Z, settings)`（域依赖已移除，`ProvisionalWorldHeight` 已删除）。
+> - `Ocean` 为「`Elevation < 64`」⇒ 现为 `OceanRule` 严格比较 `elevation < settings.SeaLevel`；`SeaLevel` 是**世界生成配置**（`WorldGenerationSettings.SeaLevel`，登记默认值 `WorldGenerationSettings.DefaultSeaLevel = 64`），**不是** `Elevation` 的计算输入，也不改变 `HeightFunction` 的地形高度。
+> - `Modifier` 恒为 `0f`、`RegionModifier` 无人调用 ⇒ 现由 `WorldStatePipeline` 两段式编排（Base → Region → `Finalize`）调用，但 Region 修正量仍为**占位实现**（`RegionModifierDetermination`，区间 `[0, 0.25)`），且 World V2 参数结果**仍无生产消费者**。
+>
+> 文中数字 `64` 出现在上述位置时均为**该时点的占位常量/测试条件**，不得据此推断当前实现。
 
 ---
 

@@ -891,9 +891,9 @@ public static class GeologyStageDValidation
         new Dictionary<string, string>
         {
             // 规范（13 份）+ ADR
-            { "../Specifications/World/VoxelWorld_Architecture.md", "779DF1EFC4082579" },
-            { "../Specifications/World/VoxelWorld_Core.md", "F718B68E95100C57" },
-            { "../Specifications/World/WorldGeneration_Core.md", "684753D5E6B31565" },
+            { "../Specifications/World/VoxelWorld_Architecture.md", "F09B17A1002D7CD2" },
+            { "../Specifications/World/VoxelWorld_Core.md", "6D471FFA184B13EC" },
+            { "../Specifications/World/WorldGeneration_Core.md", "91F0FCDA380C91F7" },
             { "../Specifications/World/VoxelWorld_Mesh.md", "81CEDBFA6E9756CE" },
             { "../Specifications/World/VoxelWorld_Mining.md", "8A2B020DDB97422B" },
             { "../Specifications/World/VoxelWorld_View.md", "D9BD5422026E21B6" },
@@ -901,9 +901,9 @@ public static class GeologyStageDValidation
             { "../Specifications/World/VoxelWorld_Runtime_Core.md", "10F1EC7F10DAD8F3" },
             { "../Specifications/World/VoxelWorld_Runtime_Interface.md", "0AE21EB684412685" },
             { "../Specifications/World/VoxelWorld_Runtime_Core_Implementation.md", "D816F09C60A810C4" },
-            { "../Specifications/World/WorldGeneration_Geology.md", "1A7DD7E7AE1EBAC9" },
-            { "../Specifications/World/WorldGeneration_Geology_Implementation.md", "9BF0E11A4E5CA87D" },
-            { "../Specifications/World/WorldGeneration_Geology_Runtime_Implementation.md", "ABF96EEE9E9850E6" },
+            { "../Specifications/World/WorldGeneration_Geology.md", "D1E70FE71BC400E1" },
+            { "../Specifications/World/WorldGeneration_Geology_Implementation.md", "2700AE40B0CB09A0" },
+            { "../Specifications/World/WorldGeneration_Geology_Runtime_Implementation.md", "373A8BF712D73C3B" },
             { "../Specifications/ArchitectureDecisionWorldSpaceEntity.txt", "218D1CAAA738C59D" },
             // VoxelCore / Generation / Mesh / View（含 BasicTerrainGenerator 与 IWorldGenerator）
             { "Scripts/VoxelWorld/VoxelType.cs", "02C1F54580AEE541" },
@@ -912,7 +912,9 @@ public static class GeologyStageDValidation
             { "Scripts/VoxelWorld/VoxelChunk.cs", "4DBDFBAC5BCE500C" },
             { "Scripts/VoxelWorld/VoxelWorld.cs", "D9E749A466635918" },
             { "Scripts/VoxelWorld/VoxelWorldDebug.cs", "6AE0C41274AF9154" },
-            { "Scripts/VoxelWorld/Generation/WorldGenerationSettings.cs", "140B7E289F05C6FA" },
+            // SeaLevel 迁移（第十轮受信同步：新增 SeaLevel 字段 / DefaultSeaLevel 常量 /
+            // 七参数构造 / IsValid 范围校验 / ToString 输出；diff 已逐行审查，+46-0，无无关改动）
+            { "Scripts/VoxelWorld/Generation/WorldGenerationSettings.cs", "7F11DEE8061E4FA1" },
             { "Scripts/VoxelWorld/Generation/IWorldGenerator.cs", "B39614CA9BF37921" },
             { "Scripts/VoxelWorld/Generation/HeightFunction.cs", "715341D5FC652408" },
             { "Scripts/VoxelWorld/Generation/BasicTerrainGenerator.cs", "7FFD8F4B1226EA4E" },
@@ -938,18 +940,22 @@ public static class GeologyStageDValidation
             { "Scripts/VoxelWorld/Runtime/Streaming/ChunkStreamingReport.cs", "B57EA40C7FA6ECC9" },
             { "Scripts/VoxelWorld/Runtime/Streaming/ChunkStreamingDriver.cs", "26DF1B6B22E2DFF3" },
             { "Scripts/VoxelWorld/Runtime/Streaming/RuntimeCoreRequestSink.cs", "FD0E5CD9D1C9D77B" },
-            { "Scripts/Game/VoxelWorldStreamingBootstrap.cs", "4738634952568520" },
+            // SeaLevel 迁移（第十轮受信同步：新增 public int SeaLevel = 64 配置字段 +
+            // 构造改为七参数显式传入 SeaLevel；diff 已逐行审查，+5-1，无无关改动）
+            { "Scripts/Game/VoxelWorldStreamingBootstrap.cs", "8A59289F0194D20F" },
             // 既有 Editor 验证入口
             { "Editor/VoxelWorldCoreValidation.cs", "6DE813AABCE95394" },
             { "Editor/WorldGenerationCoreValidation.cs", "4A517A0F902A1066" },
             { "Editor/VoxelMeshCoreValidation.cs", "5FFD8451D2CE05EB" },
             { "Editor/VoxelWorldViewValidation.cs", "BEFBAAF6B111A241" },
-            { "Editor/VoxelWorldRuntimeCoreValidation.cs", "0E0B5C160FEAB236" },
-            { "Editor/ChunkStreamingValidation.cs", "13E244B6EE978FC8" },
+            { "Editor/VoxelWorldRuntimeCoreValidation.cs", "C5ABCECD2C338BED" },
+            // 第十一轮 CS12 登记重钉 + 规范哈希重钉（第十三轮 GW10 受信同步：仅登记行与注释变化，
+            // 无断言改动；diff +5-3 已独立逐行审查，实际哈希与第十二轮 GE9 登记值一致）
+            { "Editor/ChunkStreamingValidation.cs", "BEB05E3DD16D48F3" },
             // Stage A/B/C 验证入口：经用户明确授权修改（GSA5 扫描作用域拆分 + 白名单重钉）
-            { "Editor/GeologyStageAValidation.cs", "DF42F8605BA60CAF" },
-            { "Editor/GeologyStageBValidation.cs", "CFA08E4EE8D49C99" },
-            { "Editor/GeologyStageCValidation.cs", "4379D1DD622EB737" },
+            { "Editor/GeologyStageAValidation.cs", "67DB0CD6161EE4F4" },
+            { "Editor/GeologyStageBValidation.cs", "58DA2160E30ABA72" },
+            { "Editor/GeologyStageCValidation.cs", "F52E2D1A4B515581" },
             // Stage A/B/C 的地质实现
             { "Scripts/VoxelWorld/Generation/Geology/GeologySettings.cs", "BEA8EB4F4967721C" },
             { "Scripts/VoxelWorld/Generation/Geology/GeologyNoise.cs", "2266E7A880E43315" },

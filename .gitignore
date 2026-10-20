@@ -10,3 +10,6 @@
 .vscode/
 *.csproj
 *.sln
+# R48：验证证据目录——只纳入 .md 报告；排除嵌套工程副本与原始运行日志（体积 231 MB / 3576 文件）
+/_phase2b_validation/*
+!/_phase2b_validation/*.md

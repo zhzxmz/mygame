@@ -5,9 +5,9 @@
 > **维护说明**：本文档定义参数来源边界与依赖方向，不以历史任务的修改范围限制后续维护。文中“Phase 1 临时来源”指参数系统早期实现里程碑中的占位来源登记，不等同于 World Generation Pipeline 的 Phase 1（World Skeleton Generation）。
 
 > **当前实现快照（按代码核对）**：
-> - 求值框架 `WorldParameterEvaluator.Evaluate` 已实现，按固定规则表生成 8 项参数快照；Region Modifier 当前恒为 `0`。
-> - `Elevation` 仍是域哈希占位（高度跨度硬编码为 `128`），**尚未接入** `HeightFunction.GetTerrainHeight`。
-> - `Ocean` 的 `Elevation < SeaLevel` 派生形式已实现，但 `SeaLevel` 仍硬编码为 `64`，且输入 `Elevation` 仍是占位值。
+> - 求值框架 `WorldParameterEvaluator.Evaluate` 已实现，按固定规则表生成 8 项参数的 **Base 段**快照（`IsFinalized == false`，Base 段 Modifier 恒为 `0`）；**Final 段**由 `WorldParameterEvaluator.Finalize` 合成，其 Region 修正量当前取自**占位实现**（`RegionModifierDetermination`，区间 `[0, 0.25)`，`PlaceholderAmplitude = 0.25f`；真实修正规则尚未冻结）。
+> - `Elevation` **已接线**：`ElevationRule` 直接只读转发 `HeightFunction.GetTerrainHeight(position.X, position.Z, settings)`（整数体素，域依赖已移除；`ProvisionalWorldHeight` 已删除，`WPS55`/`WPS57` 达成）。
+> - `Ocean` 的 `Elevation < SeaLevel` 派生形式已实现：`OceanRule` 以**严格小于**读取 `WorldGenerationSettings.SeaLevel`（配置，世界创建期），**不再硬编码 64**；`64` 仅是契约表 C 的**设计默认值**（代码常量 `WorldGenerationSettings.DefaultSeaLevel`，供六参数构造兼容旧调用）。`ProvisionalSeaLevel` 已删除。
 > - `Temperature` / `Moisture` 仍为域哈希占位；`Fertility` 仍为 `clamp01(Base.Temperature × Base.Moisture)`，尚未读取登记的 `SoilDepth`。
 > - `MagicDensity` / `HolyInfluence` / `CorruptionInfluence` 当前 Base 为 `0`；Region 来源修正尚未接入。
 > - `Continent` / `Slope` 尚未进入这 8 项参数求值表；`WorldSkeletonFacts` 的独立查询接口只覆盖 `Elevation` / `Ocean` / 单大陆退化 `Continent`，尚未接入参数求值器。
@@ -146,7 +146,7 @@ Biome / Geology / Resource / Ecology
 |---|---|---|---|---|
 | `Temperature`（1） | WorldState | 域 1（`Skeleton`）标签整数哈希归一化到 `[0,1)` | **占位**：骨架气候带未接入；**无空间连续性**，与真实气候语义无关 | 步骤 2：`TemperatureBase`（配置，默认 `0.5`）+ 骨架基础气候带；域 = §6.4 域 1 |
 | `Moisture`（2） | WorldState | 域 1 标签整数哈希归一化到 `[0,1)` | **占位**（同 `Temperature`） | 步骤 2：`MoistureBase`（配置，默认 `0.5`）+ 骨架基础气候带 |
-| `Elevation`（3） | 高度场（Skeleton / Geology 共用）· **转发量** | 域 1 标签整数哈希 → 整数区间 `[0,127]` | **占位 + 临时域标签**：契约 §6.4 域 1 覆盖清单**未含** `Elevation`；占位高度跨度 `128` **不是登记值** | 步骤 0：**只读转发**既有高度场（`HeightFunction.GetTerrainHeight` / `GeologySampler.SurfaceHeightAt`）+ 骨架大陆掩码叠加（`WC2`）；整数体素 `[0, WorldHeight-1]`；**终态 = 只读转发且不使用任何参数域**（`Elevation` 的域依赖被**移除**；**不得**以扩充 §6.4 域 1 覆盖清单替代） |
+| `Elevation`（3） | 高度场（Skeleton / Geology 共用）· **转发量** | `HeightFunction.GetTerrainHeight(position.X, position.Z, settings)`（整数体素） | **已接线（真实高度场，非占位）**：契约 §6.4 域 1 覆盖清单**未含** `Elevation`；占位高度跨度 `128` **不是登记值** | 步骤 0：**只读转发**既有高度场（`HeightFunction.GetTerrainHeight` / `GeologySampler.SurfaceHeightAt`）+ 骨架大陆掩码叠加（`WC2`）；整数体素 `[0, WorldHeight-1]`；**终态 = 只读转发且不使用任何参数域**（`Elevation` 的域依赖被**移除**；**不得**以扩充 §6.4 域 1 覆盖清单替代） |
 | `Fertility`（4） | WorldState | 占位派生：`clamp01(Base.Temperature × Base.Moisture)`（只读步骤 2 的 Base 级值） | **占位公式**：未使用**已登记**输入 `WorldGenerationSettings.SoilDepth`（默认 `3`，`WSC27`） | 步骤 3：`f(配置级 SoilDepth, Base 级 Temperature, Base 级 Moisture)`（`WSC33`：只冻结输入集合；`WSC35`：不得读除 `Ocean` 外的其它地理量） |
 | `MagicDensity`（5） | WorldState | 常量 `0`（= 表 A 登记默认值） | **契约默认值**（非随机占位）：真实 `Base` 即"全局基底常量（默认 `0`）"（§2.2） | 步骤 4：全局基底常量（可配置化）+ `RegionModifier`（Phase 3 供给，`PC20`） |
 | `HolyInfluence`（6） | WorldState | 常量 `0`（= 表 A 登记默认值） | 同上 | 同上（圣性来源修正由 Region 提供） |
@@ -159,7 +159,7 @@ Biome / Geology / Resource / Ecology
 |---|---|---|
 | `Temperature` | `Seed`；世界坐标；`TemperatureBase`（配置，未接入）；骨架基础气候带（未接入）；域 1 | `WPSB` 全部 |
 | `Moisture` | `Seed`；世界坐标；`MoistureBase`（配置，未接入）；骨架基础气候带（未接入）；域 1 | `WPSB` 全部 |
-| `Elevation` | **只读高度场**（未接入）；骨架大陆掩码（未接入）；`Seed`；世界坐标 | `WPSB` 全部；**另加**：任何 `RegionModifier`（`RE1`/`RA69`）、任何修正写入、插值（`WSC13`） |
+| `Elevation` | **只读高度场**（已接入：`HeightFunction.GetTerrainHeight`）；骨架大陆掩码（未接入）；`Seed`；世界坐标 | `WPSB` 全部；**另加**：任何 `RegionModifier`（`RE1`/`RA69`）、任何修正写入、插值（`WSC13`） |
 | `Fertility` | **Base 级** `Temperature` / `Moisture`（`WSC17`）；配置级 `SoilDepth`（`WSC27`，未接入）；`Seed`；世界坐标 | `WPSB` 全部；**另加**：`FinalValue` 级 `Temperature` / `Moisture`、除 `Ocean` 外的其它地理量（`WSC35`） |
 | `MagicDensity` | 全局基底常量（默认 `0`）；`RegionModifier`（**仅合成阶段**由 WorldState 消费，`RA75`/`RA76`） | `WPSB` 全部 |
 | `HolyInfluence` | 全局基底常量（默认 `0`）；`RegionModifier`（仅合成阶段） | `WPSB` 全部 |
@@ -262,24 +262,24 @@ Biome / Geology / Resource / Ecology
 |---|---|---|---|
 | `Temperature` | 域 1 标签整数哈希 → `[0,1)` | 占位 | 骨架基础气候带 + 配置读取落地（Phase 1 `World Skeleton`） |
 | `Moisture` | 域 1 标签整数哈希 → `[0,1)` | 占位 | 同上 |
-| `Elevation` | 域 1 标签整数哈希 → `[0,127]` | 占位 + 临时域标签 | **终态**：只读高度场转发接线（`Elevation` **不再使用任何参数域**；**不得**以扩充 §6.4 域 1 覆盖清单替代）。**本轮仅更新计划与契约状态：代码接线未完成**（实现仍为域 1 占位） |
+| `Elevation` | `HeightFunction.GetTerrainHeight(...)`（整数体素） | 已接线（真实高度场） | **终态**：只读高度场转发接线（`Elevation` **不再使用任何参数域**；**不得**以扩充 §6.4 域 1 覆盖清单替代）。**代码接线已完成**（`ElevationRule` 调用 `HeightFunction.GetTerrainHeight(x, z, settings)`；`ProvisionalWorldHeight` 已删除）。**仍待完成**：World V2 参数结果接入生成运行时（当前生产调用点 = 0，见 `WPS54a`）。 |
 | `Fertility` | `clamp01(Base.Temperature × Base.Moisture)` | 占位公式 | 契约 §1.3 派生规则实现（含 `SoilDepth` 输入） |
-| `Ocean` | `Elevation < 64` | **非临时**（派生形式已按契约）+ 临时常量 `SeaLevel` | `SeaLevel` 改为显式配置读取 |
+| `Ocean` | `Elevation < settings.SeaLevel`（`WorldGenerationSettings` 配置） | **非临时**（派生形式已按契约 + 配置读取已落地） | 显式配置读取**已达成**（`ProvisionalSeaLevel` 已删除；`64` = 设计默认值 `DefaultSeaLevel`）；**仍待完成**：生成运行时消费 |
 
 | # | 规则 |
 |---|---|
 | **WPS52** | 占位来源**只保证确定性**，不保证语义正确；不得据此推导任何世界结论（不得被下游当作气候/高度真值使用） |
 | **WPS53** | 占位出处在代码中**必须可定位**（附录 C）；替换时必须**同步更新本文档 §5** |
 | **WPS54** | 占位**不得**演化成"事实标准"：不得为占位值增加阈值、缓存、下游依赖（`PZ9`/`WSC103`） |
-| **WPS54a** | **本轮状态（不变量）**：`Elevation` 的域依赖替换**只在计划与契约状态层面更新**（`WPS55`–`WPS57`）；**代码接线未完成、`WorldParameterEvaluator` 未修改**。`Continent`（9）与 `Slope`（14）**保持"未接入"**，直至实现与验证完成（不得在文档中预先记为已接入） |
+| **WPS54a** | **本轮状态（不变量）**：`Elevation` 的域依赖替换**只在计划与契约状态层面更新**（`WPS55`–`WPS57`）；**`Elevation` 已接线**（`WPS57` 终态达成：域标签已移除）；`WorldParameterEvaluator` **已修改**（Base/Final 两段式 + `settings` 传递）；**但 World V2 尚未接入生成运行时**（生成链无 `WorldParameterState` 消费者）。`Continent`（9）与 `Slope`（14）**保持"未接入"**，直至实现与验证完成（不得在文档中预先记为已接入） |
 
 ### 5.2 临时常量与临时域标签登记
 
 | # | 登记项 | 现状 | 性质 | 替换方向 |
 |---|---|---|---|---|
-| **WPS55** | `Elevation` 占位高度跨度 `128` | 硬编码常量 | **非登记值**（`WorldHeight` 的真实来源是 `WorldGenerationSettings`） | 读取 `WorldGenerationSettings.WorldHeight`；占位常量删除 |
-| **WPS56** | `SeaLevel` 占位值 `64` | 硬编码常量 | **登记默认值**（契约表 C `SeaLevel` 默认 `64`） | 改为显式配置读取（值本身可不变） |
-| **WPS57** | `Elevation` 使用**域 1**（`Skeleton`）标签 | 硬编码常量 | **契约 §6.4 覆盖清单未含 `Elevation`**（真实 `Elevation` 是转发量、不需要域） | **终态**：`Elevation` 改为只读转发后**移除**域标签；**§6.4 登记不变**（**不得**把"把 `Elevation` 加入域 1 覆盖清单"当作终态方案）。**该条记录对应的历史轮次仅更新计划与契约状态，未修改实现** |
+| **WPS55** | `Elevation` 占位高度跨度 `128` | 硬编码常量 | **非登记值**（`WorldHeight` 的真实来源是 `WorldGenerationSettings`） | **已达成**：`ProvisionalWorldHeight` 已删除，改为经 `HeightFunction` 读取 `settings.WorldHeight` |
+| **WPS56** | `SeaLevel` 占位值 `64` | **已达成**：`ProvisionalSeaLevel` 常量已删除，`OceanRule` 读取 `settings.SeaLevel` | **登记默认值**（契约表 C `SeaLevel` 默认 `64`；代码常量 `WorldGenerationSettings.DefaultSeaLevel = 64`，仅作六参数构造的兼容默认） | **已达成**：显式配置读取落地（值本身不变）；**未完成**部分：World V2 参数结果尚未被生成运行时消费（生产调用点 = 0） |
+| **WPS57** | `Elevation` 使用**域 1**（`Skeleton`）标签 | 硬编码常量 | **契约 §6.4 覆盖清单未含 `Elevation`**（真实 `Elevation` 是转发量、不需要域） | **终态**：`Elevation` 改为只读转发后**移除**域标签；**§6.4 登记不变**（**不得**把"把 `Elevation` 加入域 1 覆盖清单"当作终态方案）。**实现状态（已更正）**：域标签已在实现中移除 —— `ElevationRule` 改为只读转发 `HeightFunction.GetTerrainHeight(position.X, position.Z, settings)`，`ProvisionalWorldHeight` 已删除；§6.4 登记未变更；**仍待完成**：生成运行时消费（生产调用点 = 0） |
 | **WPS58** | `Modifier` 以 `0` 承载（含 `Elevation`/`Ocean`） | 表示形态 | **登记缺口**：`PM32` 要求转发/派生参数的 `Modifier` 表示为 **`None`**（非"修正 0"），`WSC10` 要求其不进入任何求和式 | 表示法决策属后续轮次（`B-3` 类登记）；本文档**不裁决** |
 
 ### 5.3 替换纪律
@@ -456,12 +456,12 @@ Biome / Geology / Resource / Ecology
 |---|---|---|---|
 | `Temperature` | `Assets/Scripts/World/V2/WorldParameterRules.cs` → `TemperatureRule` | 占位（域 1 哈希） | 表 A1 行 1；§5.1 行 1 |
 | `Moisture` | 同上 → `MoistureRule` | 占位（域 1 哈希） | 表 A1 行 2；§5.1 行 2 |
-| `Elevation` | 同上 → `ElevationRule` | 占位（域 1 哈希 + 占位跨度） | 表 A1 行 3；§5.1 行 3；`WPS55`/`WPS57` |
+| `Elevation` | 同上 → `ElevationRule` | **已接线**（`HeightFunction.GetTerrainHeight`） | 表 A1 行 3；§5.1 行 3；`WPS55`/`WPS57` |
 | `Fertility` | 同上 → `FertilityRule` | 占位派生（Base 级 T/M） | 表 A1 行 4；§5.1 行 4；`WPS73` |
 | `MagicDensity` | 同上 → `MagicDensityRule` | 契约默认值 `0` | 表 A1 行 5 |
 | `HolyInfluence` | 同上 → `HolyInfluenceRule` | 契约默认值 `0` | 表 A1 行 6 |
 | `CorruptionInfluence` | 同上 → `CorruptionInfluenceRule` | 契约默认值 `0` | 表 A1 行 7 |
-| `Ocean` | 同上 → `OceanRule` | 契约派生（`Elevation < 64`） | 表 A1 行 8；§5.1 行 5；`WPS56` |
+| `Ocean` | 同上 → `OceanRule` | 契约派生（`Elevation < settings.SeaLevel`；设计默认值 `64`） | 表 A1 行 8；§5.1 行 5；`WPS56` |
 | 序 9–15 | **无实现**（未接入） | — | 表 B1 / 表 B2 |
 | 序 16–20 | **不属参数层**（Owner = Geology / Resource） | — | §3.3 |
 

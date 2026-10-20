@@ -864,7 +864,9 @@ public static class ChunkStreamingValidation
             { "Scripts/VoxelWorld/VoxelChunk.cs", "4DBDFBAC5BCE500C" },
             { "Scripts/VoxelWorld/VoxelWorld.cs", "D9E749A466635918" },
             { "Scripts/VoxelWorld/VoxelWorldDebug.cs", "6AE0C41274AF9154" },
-            { "Scripts/VoxelWorld/Generation/WorldGenerationSettings.cs", "140B7E289F05C6FA" },
+            // SeaLevel 迁移（第十一轮 CS12 受信同步：该文件新增 SeaLevel 字段 / DefaultSeaLevel 常量 /
+            // 七参数构造 / IsValid 范围校验 / ToString 输出；diff +46-0 已独立逐行审查，无无关改动）
+            { "Scripts/VoxelWorld/Generation/WorldGenerationSettings.cs", "7F11DEE8061E4FA1" },
             { "Scripts/VoxelWorld/Generation/IWorldGenerator.cs", "B39614CA9BF37921" },
             { "Scripts/VoxelWorld/Generation/HeightFunction.cs", "715341D5FC652408" },
             { "Scripts/VoxelWorld/Generation/BasicTerrainGenerator.cs", "7FFD8F4B1226EA4E" },
@@ -891,10 +893,10 @@ public static class ChunkStreamingValidation
             { "Editor/WorldGenerationCoreValidation.cs", "4A517A0F902A1066" },
             { "Editor/VoxelMeshCoreValidation.cs", "5FFD8451D2CE05EB" },
             { "Editor/VoxelWorldViewValidation.cs", "BEFBAAF6B111A241" },
-            { "Editor/VoxelWorldRuntimeCoreValidation.cs", "0E0B5C160FEAB236" },
+            { "Editor/VoxelWorldRuntimeCoreValidation.cs", "C5ABCECD2C338BED" },
             // 规范
-            { "../Specifications/World/VoxelWorld_Core.md", "F718B68E95100C57" },
-            { "../Specifications/World/WorldGeneration_Core.md", "684753D5E6B31565" },
+            { "../Specifications/World/VoxelWorld_Core.md", "6D471FFA184B13EC" },
+            { "../Specifications/World/WorldGeneration_Core.md", "91F0FCDA380C91F7" },
             { "../Specifications/World/VoxelWorld_Mesh.md", "81CEDBFA6E9756CE" },
             { "../Specifications/World/VoxelWorld_Mining.md", "8A2B020DDB97422B" },
             { "../Specifications/World/VoxelWorld_View.md", "D9BD5422026E21B6" },

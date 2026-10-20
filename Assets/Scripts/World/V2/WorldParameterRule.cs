@@ -1,3 +1,5 @@
+using VoxelWorld.Generation;
+
 namespace World.V2
 {
     /// <summary>
@@ -126,6 +128,6 @@ namespace World.V2
         /// 求该点的 **BaseValue**（不含任何 Region 修正；`PM27` / `WSC21`）。
         /// 只允许读取 <paramref name="evaluated"/> 中已完成步骤的 Base 值。
         /// </summary>
-        float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position);
+        float EvaluateBaseValue(IWorldParameterBaseReader evaluated, WorldSeed seed, WorldCoordinate position, WorldGenerationSettings settings);
     }
 }

@@ -1,5 +1,7 @@
 using System;
 
+using VoxelWorld.Generation;
+
 namespace World.V2
 {
     /// <summary>
@@ -13,9 +15,9 @@ namespace World.V2
     /// <code>
     ///   Seed + WorldCoordinate
     ///        ↓  WorldParameterRules（冻结顺序 0→4，规则表）
-    ///   BaseValue（逐参数）
-    ///        ↓  Modifier（唯一写入者 = Region 层；本回合未接入 ⇒ 0）
-    ///   FinalValue = Evaluate(BaseValue + Modifier)
+    ///   BaseValue（逐参数）                      ← Evaluate()：发布 **Base 段**（IsFinalized = false）
+    ///        ↓  Modifier（唯一写入者 = Region 层；由外部传入 RegionModifier）
+    ///   FinalValue = clamp01(BaseValue + Modifier) ← Finalize()：发布 **Final 段**（IsFinalized = true）
     /// </code>
     ///
     /// 契约依据：
@@ -29,7 +31,10 @@ namespace World.V2
     ///   · `WSC103` / `DR35`：**不得**存在第二套求值路径（查询必须走本入口）。
     ///
     /// 明确**不做**（本回合边界）：
-    ///   · 不接入 Region（`Modifier` 恒为 0，属 `PC20` 的 Phase 3 供给）；
+    ///   · 本类型**不自行产生** Region 修正量：`Evaluate` 的 `Modifier` 恒为 0（属 `PC20` 的 Phase 3 供给），
+    ///     `Finalize` 只**消费**外部传入的 `RegionModifier`，绝不自行推断或改写修正量；
+    ///   · `Finalize` 的**编排**（Base → Region → Finalize 的执行顺序）由 `WorldStatePipeline` 承担，
+    ///     本类保持"唯一合成权威"，不引入第二条求值路径（`WSC103` / `DR35`）；
     ///   · 不实现噪声算法、不生成地形、不读取高度场（`Elevation` 为占位，见 `WorldParameterRules`）；
     ///   · 不读取 Biome / 生态 / 资源 / Geology / 体素 / Chunk / Runtime / Player / Entity（`WSC19` / `PZ7`）；
     ///   · 无副作用：不写体素、不建 Chunk、不置脏、不生成对象（`WSC20` / `T4`）；
@@ -57,14 +62,13 @@ namespace World.V2
         /// 单点参数求值（唯一入口）：`Seed + WorldCoordinate → WorldParameterState`。
         /// 纯函数、无副作用、可独立重复求值（`WSC23` / `PM53`）；不要求任何 Chunk / 世界实例存在（`PM54` / `PC77`）。
         /// </summary>
-        public static WorldParameterState Evaluate(WorldSeed seed, WorldCoordinate position)
+        public static WorldParameterState Evaluate(WorldSeed seed, WorldGenerationSettings settings, WorldCoordinate position)
         {
             int capacity = WorldParameterState.Capacity;
 
             // 定长索引容器（索引 = ParameterId；槽 0 不使用，便于按身份直读）：PM37 / PM45 / PM46。
             float[] baseValues = new float[capacity + 1];
             bool[] evaluated = new bool[capacity + 1];
-            WorldParameterCompositionKind[] compositionKinds = new WorldParameterCompositionKind[capacity + 1];
 
             IWorldParameterBaseReader reader = new EvaluatedBaseReader(baseValues, evaluated);
 
@@ -75,14 +79,16 @@ namespace World.V2
                 IWorldParameterRule rule = WorldParameterRules.GetRule(i);
                 int parameterId = rule.ParameterId;
 
-                float baseValue = rule.EvaluateBaseValue(reader, seed, position);
+                float baseValue = rule.EvaluateBaseValue(reader, seed, position, settings);
 
                 baseValues[parameterId] = baseValue;
                 evaluated[parameterId] = true;
-                compositionKinds[parameterId] = rule.CompositionKind;
             }
 
-            // 阶段 B：按**参数身份顺序**装配三态快照（槽位 = ParameterId - 1；与容器索引语义一致）。
+            // 阶段 B：按**参数身份顺序**装配 **Base 段**快照（槽位 = ParameterId - 1；与容器索引语义一致）。
+            // 【两段式发布 · PC19】本段**不产生定稿的 Final**：Region（Phase 3）尚未产出修正量，
+            // 因此 `Modifier` 显式取 0（WSC14 零修正显式性），`FinalValue` 暂置为 Base 且**不具权威性**
+            // （由 `WorldParameterState.IsFinalized == false` 显式标记；定稿走 `Finalize`）。
             WorldParameterValue[] values = new WorldParameterValue[capacity];
             for (int slot = 0; slot < capacity; slot++)
             {
@@ -96,14 +102,121 @@ namespace World.V2
                 }
 
                 float baseValue = baseValues[parameterId];
-                float modifier = ZeroRegionModifier;
-                float finalValue = Compose(compositionKinds[parameterId], baseValue, modifier);
 
-                values[slot] = new WorldParameterValue(parameterId, baseValue, modifier, finalValue);
+                values[slot] = new WorldParameterValue(parameterId, baseValue, ZeroRegionModifier, baseValue);
             }
 
-            // 快照不可变定稿（PM34）；容器自行防御性拷贝。
-            return new WorldParameterState(values);
+            // Base 段快照（不可变、未定稿：PM34 / PC19）。
+            return new WorldParameterState(values, false);
+        }
+
+        /// <summary>
+        /// **Final 段定稿（唯一合成权威）**：`Base 段 + Region 修正量 → Final 段`（`PC19` 第二段）。
+        ///
+        /// 前置：`baseState` 必须是**未定稿**的 Base 段快照（来自 <see cref="Evaluate"/>）；
+        /// `regionModifier` 由 Region 层产出（`PC20`：Region 是修正量的唯一写入者）。
+        ///
+        /// 语义（`WSC §2.2` 冻结）：
+        ///   · 6 个 `AdditiveClamped` 参数：`Final = clamp01(Base + Modifier)`（`WSC9` / `WSC12`）；
+        ///   · `Elevation` / `Ocean`：`Modifier` **结构上恒为 0**、`Final = Base`（`WSC10` / `WSC13`）。
+        /// 纯函数、无副作用、不缓存；同输入 ⇒ 逐字段相同（`PM52`）。
+        /// </summary>
+        /// <param name="baseState">`Evaluate` 产出的 Base 段快照（`IsFinalized == false`）。</param>
+        /// <param name="regionModifier">Region 层修正量（占位实现期可为全零）。</param>
+        /// <returns>已定稿快照（`IsFinalized == true`）。</returns>
+        public static WorldParameterState Finalize(WorldParameterState baseState, RegionModifier regionModifier)
+        {
+            if (baseState == null)
+            {
+                throw new ArgumentNullException("baseState");
+            }
+
+            // 注意：`RegionModifier` 是**值类型**（readonly struct），不存在 null，
+            // 因此**不做** null 检查；"无修正"必须以全零修正量显式表达（WSC14）。
+            if (baseState.IsFinalized)
+            {
+                throw new InvalidOperationException(
+                    "Base 段快照已定稿，不得二次定稿（PC19：Final 段只能由 Base 段 + Region 修正量产生一次）。");
+            }
+
+            int capacity = WorldParameterState.Capacity;
+            WorldParameterValue[] values = new WorldParameterValue[capacity];
+
+            for (int slot = 0; slot < capacity; slot++)
+            {
+                int parameterId = slot + 1;
+                WorldParameterValue source = baseState[slot];
+
+                if (source.ParameterId != parameterId)
+                {
+                    throw new InvalidOperationException(
+                        "Base 段快照的身份顺序非法（槽位 " + slot.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                        " 期望身份 " + parameterId.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                        "，实际 " + source.ParameterId.ToString(System.Globalization.CultureInfo.InvariantCulture) + "）（PM37）。");
+                }
+
+                float modifier = ModifierFor(parameterId, regionModifier);
+                float finalValue = Compose(KindOf(parameterId), source.BaseValue, modifier);
+
+                values[slot] = new WorldParameterValue(parameterId, source.BaseValue, modifier, finalValue);
+            }
+
+            return new WorldParameterState(values, true);
+        }
+
+        /// <summary>
+        /// 逐参数取 Region 修正分量（参数身份 → `RegionModifier` 分量）。
+        /// `Elevation`（序 3）与 `Ocean`（序 8）**结构上恒为 0**：不得进入任何修正求和式（`WSC10`）。
+        /// </summary>
+        private static float ModifierFor(int parameterId, RegionModifier regionModifier)
+        {
+            switch (parameterId)
+            {
+                case WorldParameterIds.Temperature:
+                    return regionModifier.TemperatureModifier;
+
+                case WorldParameterIds.Moisture:
+                    return regionModifier.MoistureModifier;
+
+                case WorldParameterIds.Fertility:
+                    return regionModifier.FertilityModifier;
+
+                case WorldParameterIds.MagicDensity:
+                    return regionModifier.MagicDensityModifier;
+
+                case WorldParameterIds.HolyInfluence:
+                    return regionModifier.HolyInfluenceModifier;
+
+                case WorldParameterIds.CorruptionInfluence:
+                    return regionModifier.CorruptionInfluenceModifier;
+
+                case WorldParameterIds.Elevation:
+                case WorldParameterIds.Ocean:
+                    return ZeroRegionModifier;
+
+                default:
+                    throw new ArgumentOutOfRangeException("parameterId");
+            }
+        }
+
+        /// <summary>
+        /// 参数身份 → 合成类型（**按规则表现查**，不建静态表：保持"无静态可变状态"纪律）。
+        /// 规则表已在静态构造期校验完整性，因此必有一项匹配。
+        /// </summary>
+        private static WorldParameterCompositionKind KindOf(int parameterId)
+        {
+            for (int i = 0; i < WorldParameterRules.Count; i++)
+            {
+                IWorldParameterRule rule = WorldParameterRules.GetRule(i);
+
+                if (rule.ParameterId == parameterId)
+                {
+                    return rule.CompositionKind;
+                }
+            }
+
+            throw new InvalidOperationException(
+                "参数身份没有登记合成类型（PM45）：" + parameterId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
         /// <summary>
@@ -189,6 +302,35 @@ namespace World.V2
                 {
                     throw new InvalidOperationException(
                         "规则表缺少已登记参数（PC19）：" + parameterId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+            }
+
+            // 【合成类型不变式（WSC §2.2 / WSC10 / WSC13）】把契约文本变成"不满足即启动失败"：
+            //   · Elevation（序 3）必须 Forwarded、Ocean（序 8）必须 Derived —— 二者**无合成**，
+            //     Region 修正量在结构上不得进入其求和式；
+            //   · 其余 6 个环境参数必须 AdditiveClamped —— 否则 Region 修正量无法被合成。
+            for (int i = 0; i < WorldParameterRules.Count; i++)
+            {
+                IWorldParameterRule rule = WorldParameterRules.GetRule(i);
+                WorldParameterCompositionKind kind = rule.CompositionKind;
+
+                if (rule.ParameterId == WorldParameterIds.Elevation && kind != WorldParameterCompositionKind.Forwarded)
+                {
+                    throw new InvalidOperationException("Elevation 的合成类型必须是 Forwarded（WSC10 / WSC13）。");
+                }
+
+                if (rule.ParameterId == WorldParameterIds.Ocean && kind != WorldParameterCompositionKind.Derived)
+                {
+                    throw new InvalidOperationException("Ocean 的合成类型必须是 Derived（WSC10 / WSC13）。");
+                }
+
+                if (rule.ParameterId != WorldParameterIds.Elevation &&
+                    rule.ParameterId != WorldParameterIds.Ocean &&
+                    kind != WorldParameterCompositionKind.AdditiveClamped)
+                {
+                    throw new InvalidOperationException(
+                        "环境参数（除 Elevation / Ocean）的合成类型必须是 AdditiveClamped（WSC §2.2）：" +
+                        rule.ParameterId.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 }
             }
         }

@@ -62,6 +62,9 @@ public sealed class VoxelWorldStreamingBootstrap : MonoBehaviour
     public int TerrainHeight = 24;
     public int SoilDepth = 3;
     public int WorldHeight = 64;
+
+    /// <summary>海平面（世界体素 y；合法范围 [0, WorldHeight]；默认 64）。契约 SeaLevel 属配置（世界创建期）。</summary>
+    public int SeaLevel = 64;
     public float TerrainFrequency = 0.06f;
     public float TerrainAmplitude = 6f;
 
@@ -189,7 +192,7 @@ public sealed class VoxelWorldStreamingBootstrap : MonoBehaviour
         string reason;
 
         WorldGenerationSettings generationSettings = new WorldGenerationSettings(
-            Seed, TerrainHeight, SoilDepth, WorldHeight, TerrainFrequency, TerrainAmplitude);
+            Seed, TerrainHeight, SoilDepth, WorldHeight, TerrainFrequency, TerrainAmplitude, SeaLevel);
 
         if (!generationSettings.IsValid(out reason))
         {

@@ -124,6 +124,14 @@ public static class GeologyRuntimeIntegrationValidation
                   generatorProperty.PropertyType == typeof(IWorldGenerator),
                 "GE1：Generator 属性类型为 IWorldGenerator（抽象，不是具体类型）");
 
+            // R38：rig 参考设置与 Bootstrap 实际配置的一致性（仅当前默认配置；不宣称覆盖非默认 SeaLevel）
+            Check(rig.GenerationSettings.SeaLevel == rig.Bootstrap.SeaLevel,
+                "GE1：rig 参考设置 SeaLevel 与 Bootstrap 配置一致（" +
+                rig.GenerationSettings.SeaLevel + " / " + rig.Bootstrap.SeaLevel + "）");
+            Check(rig.Bootstrap.SeaLevel == WorldGenerationSettings.DefaultSeaLevel,
+                "GE1：Bootstrap.SeaLevel 等于登记默认值 DefaultSeaLevel（" +
+                rig.Bootstrap.SeaLevel + " / " + WorldGenerationSettings.DefaultSeaLevel + "）");
+
             // 默认配置：地质特性开启（来自显式字段）；全关时可退化为 Stage 1（见 GE3 对照与 Stage D GW2）
             Check(bootstrap.Geology.EnableCaves == BootstrapDefaults.EnableGeologyCaves,
                 "GE1：地质开关来自显式字段（EnableCaves = " +
@@ -547,7 +555,7 @@ public static class GeologyRuntimeIntegrationValidation
         {
             { "Scripts/VoxelWorld/Generation/BasicTerrainGenerator.cs", "7FFD8F4B1226EA4E" },
             { "Scripts/VoxelWorld/Generation/IWorldGenerator.cs", "B39614CA9BF37921" },
-            { "Scripts/VoxelWorld/Generation/WorldGenerationSettings.cs", "140B7E289F05C6FA" },
+            { "Scripts/VoxelWorld/Generation/WorldGenerationSettings.cs", "7F11DEE8061E4FA1" }, // 第十二轮：SeaLevel 迁移后受信重钉（diff +46-0 已独立逐行审查）
             { "Scripts/VoxelWorld/Generation/HeightFunction.cs", "715341D5FC652408" },
             // Runtime Core（12 个）
             { "Scripts/VoxelWorld/Runtime/Abstractions/IChunkMesher.cs", "8389FA2E4A4DCF7D" },
@@ -708,9 +716,9 @@ public static class GeologyRuntimeIntegrationValidation
         new Dictionary<string, string>
         {
             // 规范（14 份）+ ADR
-            { "../Specifications/World/VoxelWorld_Architecture.md", "779DF1EFC4082579" },
-            { "../Specifications/World/VoxelWorld_Core.md", "F718B68E95100C57" },
-            { "../Specifications/World/WorldGeneration_Core.md", "684753D5E6B31565" },
+            { "../Specifications/World/VoxelWorld_Architecture.md", "F09B17A1002D7CD2" },
+            { "../Specifications/World/VoxelWorld_Core.md", "6D471FFA184B13EC" },
+            { "../Specifications/World/WorldGeneration_Core.md", "91F0FCDA380C91F7" },
             { "../Specifications/World/VoxelWorld_Mesh.md", "81CEDBFA6E9756CE" },
             { "../Specifications/World/VoxelWorld_Mining.md", "8A2B020DDB97422B" },
             { "../Specifications/World/VoxelWorld_View.md", "D9BD5422026E21B6" },
@@ -718,9 +726,9 @@ public static class GeologyRuntimeIntegrationValidation
             { "../Specifications/World/VoxelWorld_Runtime_Core.md", "10F1EC7F10DAD8F3" },
             { "../Specifications/World/VoxelWorld_Runtime_Interface.md", "0AE21EB684412685" },
             { "../Specifications/World/VoxelWorld_Runtime_Core_Implementation.md", "D816F09C60A810C4" },
-            { "../Specifications/World/WorldGeneration_Geology.md", "1A7DD7E7AE1EBAC9" },
-            { "../Specifications/World/WorldGeneration_Geology_Implementation.md", "9BF0E11A4E5CA87D" },
-            { "../Specifications/World/WorldGeneration_Geology_Runtime_Implementation.md", "ABF96EEE9E9850E6" },
+            { "../Specifications/World/WorldGeneration_Geology.md", "D1E70FE71BC400E1" },
+            { "../Specifications/World/WorldGeneration_Geology_Implementation.md", "2700AE40B0CB09A0" },
+            { "../Specifications/World/WorldGeneration_Geology_Runtime_Implementation.md", "373A8BF712D73C3B" },
             { "../Specifications/ArchitectureDecisionWorldSpaceEntity.txt", "218D1CAAA738C59D" },
             // VoxelCore
             { "Scripts/VoxelWorld/VoxelType.cs", "02C1F54580AEE541" },
@@ -744,7 +752,7 @@ public static class GeologyRuntimeIntegrationValidation
             { "Editor/WorldGenerationCoreValidation.cs", "4A517A0F902A1066" },
             { "Editor/VoxelMeshCoreValidation.cs", "5FFD8451D2CE05EB" },
             { "Editor/VoxelWorldViewValidation.cs", "BEFBAAF6B111A241" },
-            { "Editor/VoxelWorldRuntimeCoreValidation.cs", "0E0B5C160FEAB236" }
+            { "Editor/VoxelWorldRuntimeCoreValidation.cs", "C5ABCECD2C338BED" }
         };
 
     /// <summary>
@@ -763,12 +771,12 @@ public static class GeologyRuntimeIntegrationValidation
     private static readonly Dictionary<string, string> AuthorizedChangedFiles =
         new Dictionary<string, string>
         {
-            { "Scripts/Game/VoxelWorldStreamingBootstrap.cs", "4738634952568520" },
-            { "Editor/ChunkStreamingValidation.cs", "13E244B6EE978FC8" },
-            { "Editor/GeologyStageAValidation.cs", "DF42F8605BA60CAF" },
-            { "Editor/GeologyStageBValidation.cs", "CFA08E4EE8D49C99" },
-            { "Editor/GeologyStageCValidation.cs", "4379D1DD622EB737" },
-            { "Editor/GeologyStageDValidation.cs", "CB0C506ECD786D59" }
+            { "Scripts/Game/VoxelWorldStreamingBootstrap.cs", "8A59289F0194D20F" }, // 第十二轮：SeaLevel 迁移后受信重钉（diff +4-1 已独立逐行审查）
+            { "Editor/ChunkStreamingValidation.cs", "BEB05E3DD16D48F3" }, // 第十二轮：CS12 登记重钉 + 规范哈希重钉后同步（仅登记行与注释变化，无断言改动）
+            { "Editor/GeologyStageAValidation.cs", "67DB0CD6161EE4F4" },
+            { "Editor/GeologyStageBValidation.cs", "58DA2160E30ABA72" },
+            { "Editor/GeologyStageCValidation.cs", "F52E2D1A4B515581" },
+            { "Editor/GeologyStageDValidation.cs", "C80477D2430B85AA" } // 第十二轮：早前已批准登记重钉后同步（仅登记行与注释变化，无断言改动）
         };
 
     private static void ValidateAllExistingFiles()
@@ -940,6 +948,7 @@ public static class GeologyRuntimeIntegrationValidation
             Bootstrap.TerrainHeight = 24;
             Bootstrap.SoilDepth = 3;
             Bootstrap.WorldHeight = 64;
+            Bootstrap.SeaLevel = 64;
             Bootstrap.TerrainFrequency = 0.06f;
             Bootstrap.TerrainAmplitude = 6f;
 
@@ -949,7 +958,7 @@ public static class GeologyRuntimeIntegrationValidation
 
             GenerationSettings = new WorldGenerationSettings(
                 Bootstrap.Seed, Bootstrap.TerrainHeight, Bootstrap.SoilDepth,
-                Bootstrap.WorldHeight, Bootstrap.TerrainFrequency, Bootstrap.TerrainAmplitude);
+                Bootstrap.WorldHeight, Bootstrap.TerrainFrequency, Bootstrap.TerrainAmplitude, Bootstrap.SeaLevel);
 
             Bootstrap.Build();
         }

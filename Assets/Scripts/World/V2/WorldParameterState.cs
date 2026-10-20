@@ -124,9 +124,28 @@ namespace World.V2
         public const int Capacity = 8;
 
         private readonly WorldParameterValue[] values;
+        private readonly bool isFinalized;
 
+        /// <summary>
+        /// 构造**未定稿**快照（等价于 `WorldParameterState(values, false)`）。
+        /// 语义：本快照只发布 **Base 段**；`FinalValue` 尚未定稿，调用方**不得**把它当作最终值读取
+        /// （`PC19` 两段式发布 / `WSC21` / `PM33` 禁止部分填充被当作有效结果）。
+        /// </summary>
         /// <param name="values">按参数身份排列的状态值；长度必须等于 Capacity。</param>
         public WorldParameterState(WorldParameterValue[] values)
+            : this(values, false)
+        {
+        }
+
+        /// <summary>
+        /// 构造快照并**显式声明定稿状态**（`PC19` 两段式发布的载体）：
+        ///   · `isFinalized == false` ⇒ **Base 段**（`FinalValue` 未定稿，仅供调试/断言，不构成权威值）；
+        ///   · `isFinalized == true`  ⇒ **Final 段已定稿**（必须在 Region（Phase 3）产出修正量之后，
+        ///     由 <see cref="WorldParameterEvaluator.Finalize"/> 以唯一合成权威产生）。
+        /// </summary>
+        /// <param name="values">按参数身份排列的状态值；长度必须等于 Capacity。</param>
+        /// <param name="isFinalized">是否已定稿（`true` 只允许由 Finalize 路径给出）。</param>
+        public WorldParameterState(WorldParameterValue[] values, bool isFinalized)
         {
             if (values == null)
             {
@@ -146,6 +165,17 @@ namespace World.V2
             // 防御性拷贝：快照不可被外部篡改（不可变语义）。
             this.values = new WorldParameterValue[Capacity];
             Array.Copy(values, this.values, Capacity);
+            this.isFinalized = isFinalized;
+        }
+
+        /// <summary>
+        /// 该快照的 **Final 段是否已定稿**（`PC19` 两段式发布）。
+        /// `false` ⇒ 只发布了 Base 段，`FinalValue` 不构成权威值（`WSC21`）；
+        /// `true`  ⇒ Final 已在 Region 之后由 <see cref="WorldParameterEvaluator.Finalize"/> 定稿。
+        /// </summary>
+        public bool IsFinalized
+        {
+            get { return isFinalized; }
         }
 
         /// <summary>参数个数（恒为 Capacity）。</summary>

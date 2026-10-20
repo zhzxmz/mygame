@@ -1,5 +1,7 @@
 using System.Globalization;
 
+using VoxelWorld.Generation;
+
 namespace World.V2
 {
     /// <summary>
@@ -35,13 +37,18 @@ namespace World.V2
         public const int LastEnvironmentParameterId = WorldParameterIds.Last;
 
         /// <summary>
-        /// 单点参数查询（唯一入口）：转发给 <see cref="WorldParameterEvaluator"/>。
+        /// 单点参数查询（Base 段入口）：转发给 <see cref="WorldParameterEvaluator"/>。
         /// 同 `Seed` + 同 <see cref="WorldCoordinate"/> ⇒ 逐字段相同（`D5` / `PM52`）；
         /// 不要求任何 Chunk 已加载 / 世界实例存在（`PM54` / `PC77`）。
+        ///
+        /// 【返回值语义（`PC19` 两段式发布）】返回快照的 `IsFinalized == false`：
+        /// 只发布 **Base 段**，`FinalValue` **不是**权威值。需要已定稿的最终值时必须走
+        /// <see cref="WorldStatePipeline.EvaluateFinal"/>（Base → Region → Finalize），
+        /// 不得把本方法的结果当作 `FinalState` 使用（`PC21`）。
         /// </summary>
-        public static WorldParameterState Evaluate(WorldSeed seed, WorldCoordinate position)
+        public static WorldParameterState Evaluate(WorldSeed seed, WorldGenerationSettings settings, WorldCoordinate position)
         {
-            return WorldParameterEvaluator.Evaluate(seed, position);
+            return WorldParameterEvaluator.Evaluate(seed, settings, position);
         }
 
         /// <summary>调试用文本（与区域设置无关；不参与任何计算、不读取任何求值结果）。</summary>
